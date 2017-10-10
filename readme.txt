@@ -43,7 +43,7 @@ readalpha.cc/memo.cc/timetrig.cc/fastalpha.cc/difalpha.cc/resid.cc
 
 Overview
 
-root -q -b -l readalpha.cc+ & root -q	-b -l memo.cc+
+root -q -b -l readalpha.cc+ & root -q -b -l memo.cc+
 root -q -b -l timetrig.cc+
 root -q -b -l fastalpha.cc+
 root -q -b -l difalpha.cc+
