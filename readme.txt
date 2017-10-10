@@ -6,9 +6,9 @@ Please read following procedures
 
 1. Setting Variables
 export BG="1"
-#use BackGround(1) or not(0)
+#sample with BackGround(1) or not(0)
 export CV="0"
-#use Cavern(1) or not(0)
+#sample with Cavern(1) or not(0)
 export MU="80"
 #pile up events of minBias
 export ARTDEADTIME="40"
@@ -17,20 +17,24 @@ export STRIPDEADTIME="300"
 #strip dead time ---ns
 export THRESHOLD="1250"
 #VMM charge threshold in Digitization
-export NAMECORE=MC12.NSW.107206.atlasG4.01.0000.Pt.100.generator.HITS_StripDeadtime-300_ARTDeadTime-40_electronicsThreshold-1250_WB
+export PEAKINGTIME="100"
+#VMM peaking time in Digitization
+export NAMECORE=MC12.NSW.107206.atlasG4.01.0000.Pt.100.generator.HITS_StripDeadtime-300_ARTDeadTime-40_electronicsThreshold-1250_peakTime-100_WB
 #the name of root file before ".root"
 export DRCUT="10"
-#using this value of localx (=Rcosdphi) distance from truth hit position like 10mm, recognize signals as coming from muon or secondary particles
+#using this value of localx (=R*cos(dphi)) distance from truth hit position like 10mm, recognize signals as coming from muon or secondary particles
 export ETASLOPEWIDTH="0.0015"
-#slope coincidence width for eta
+#slope coincidence width for eta layers
 export STEREOSLOPEWIDTH="0.004"
-#slope coincidence width for stereo
+#slope coincidence width for stereo layers
 export BCstart="0"
-#in trackfinding, we start to find tracks with which BC 
+#in trackfinding, which BC to start with 
 export NDATA="1"
 #the number of root data file for the situation that there are a number of NAMECORE_*.root files.
-
-
+export TriggerType="0"
+# in timetrig.cc, which selecting algorithm in a slope road
+export OPTION="1"
+# in timetrig.cc, which option to use
 
 2. Using macros
 
@@ -49,7 +53,7 @@ readalpha.cc : to read data, translate signals to xyz,localx and calculate timin
 NAMECORE.root -> NAMECORExyz.root 
 memo.cc : to memo truth particle eta or vertex_n and so on of each event
 NAMECORE.root -> NAMECOREmemo.root
-timetrig.cc :  to find tracks and calculate track finding efficiencies of many parameter conditions
+timetrig.cc :  to find tracks and calculate track finding efficiencies at each parameter condition
 NAMECORExyz.root & NAMECOREmemo.root -> NAMECOREtag.root(main) & NAMECOREsel.root(for debugging)
 fastalpha.cc : to change format of track segments
 NAMECOREtag.root -> NAMECOREfast.root
@@ -65,13 +69,13 @@ Adding more notice to coments written in the macro.
 
 timetrig.cc:
 //Overall
-using "const int option", you can basically choose the purpose of triggering.
+using "const int option", you can basically choose the purpose of this trigger macro.
 "option = 1" is default and other options don't make an output root file and they are for drawing graphs. 
 //selection
 there are options to select one from VMM signals (if there is several VMM signals in the same slope road)  
-"biason = 1" is default.
+"timebiason = 1" is default.
 
 difalpha.cc:
 "uvfit = 1" was used by Koki by default,
-but according to the atlas internal note, we see the "uvfit = 2" option is more actual.
+but according to the atlas internal note, the "uvfit = 2" option is more actual.
 
