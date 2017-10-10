@@ -32,6 +32,17 @@
 using namespace std;
 using namespace ROOT::Math;
 
+double Dphi(int sector,double phi){
+  const double pi = TMath::Pi();
+  double dphi = phi;
+  if(sector==0) dphi += pi/8.0;
+  while(dphi>pi/8.0||dphi<=-pi/8.0){
+    if(dphi>pi/8.0) dphi -= pi/4.0;
+    if(dphi<=-pi/8.0) dphi += pi/4.0;
+  }
+  return dphi;
+}
+
 int SectorAllpat(int n,int *vec){
   int Allpat = 0;
   int layeron[8]={0};
@@ -95,6 +106,222 @@ int SectorXpat(int n,int *vec){
   }
   return Xpat;
 }
+
+int ForLofU(double u1,double u2,double v1,double v2,double mx,double etaslopewidth){
+  int flu = -1;
+  int flv = -1;
+  double min = 0;
+  min = abs(u1+v1-2.0*mx); flu = 0; flv = 0;
+  if(abs(u1+v2-2.0*mx) < min){ min = abs(u1+v2-2.0*mx); flu = 0; flv = 1;}
+  if(abs(u2+v1-2.0*mx) < min){ min = abs(u2+v1-2.0*mx); flu = 1; flv = 0;}
+  if(abs(u2+v2-2.0*mx) < min){ min = abs(u2+v2-2.0*mx); flu = 1; flv = 1;}
+  if(min>etaslopewidth){ flu = -1; flv = -1; }
+  return flu;
+}
+int ForLofV(double u1,double u2,double v1,double v2,double mx,double etaslopewidth){
+  int flu = -1;
+  int flv= -1;
+  double min = 0;
+  min = abs(u1+v1-2.0*mx); flu = 0; flv= 0;
+  if(abs(u1+v2-2.0*mx) < min){ min = abs(u1+v2-2.0*mx); flu = 0; flv = 1;}
+  if(abs(u2+v1-2.0*mx) < min){ min = abs(u2+v1-2.0*mx); flu = 1; flv = 0;}
+  if(abs(u2+v2-2.0*mx) < min){ min = abs(u2+v2-2.0*mx); flu = 1; flv = 1;}
+  if(min>etaslopewidth){ flu = -1; flv = -1; }
+  return flv;
+}
+
+void UVfit(int n,int *vec,double *slope,int *U_valid,int *V_valid,int *layerbit,double *phicoeff,double etaslopewidth,int uv_fit,int *Grade,int *xuse){//size of layerbit == 8                                                 
+  double h = etaslopewidth/2.0;
+  int layeron[8]={0};
+  int layeruse[8]={0};
+  double layerslope[8]={0};
+  double layercoeff[8]={0};
+  double mx = 0;
+  double mu = 0;
+  double mv = 0;
+  int nX = 0;
+  int nU = 0;
+  int nV = 0;
+  int nXuse = 0;
+  int nUuse = 0;
+  int nVuse = 0;
+  int d = 0;
+  int grade = 0;
+  for(int i=0;i<n;i++){
+    d = *vec;
+    layeron[(d-1)%8] = 1;
+    layerslope[(d-1)%8] = *slope;
+    if((d-1)%8<=1||(d-1)%8>=6){
+      nX += 1;
+    }else{
+      if((d-1)%8==2||(d-1)%8==4)nU+=1;
+      if((d-1)%8==3||(d-1)%8==5)nV+=1;
+    }
+    ++vec;
+    ++slope;
+  }
+  nX = layeron[0]+layeron[1]+layeron[6]+layeron[7];
+  nU = layeron[2]+layeron[4];
+  nV = layeron[3]+layeron[5];
+  int Uvalid = 0;
+  int Vvalid = 0;
+  int Xuse = 0;
+  int Uuse = 0;
+  int Vuse = 0;
+  if(uv_fit==1){
+    if(nU==2)Uvalid = 1;
+    if(nV==2)Vvalid = 1;
+  }
+  if(uv_fit==2||uv_fit==3){
+    if(nU==2&&abs(layerslope[2]-layerslope[4])<h)Uvalid = 1;
+    if(nV==2&&abs(layerslope[3]-layerslope[5])<h)Vvalid = 1;
+  }
+  if(Uvalid==1&&Vvalid==1){
+    Xuse = 0;
+    Uuse = 1;
+    Vuse = 1;
+  }
+  if( (Uvalid==1&&Vvalid==0) || (Uvalid==0&&Vvalid==1) ){
+    Xuse = 1;
+    Uuse = Uvalid;
+    Vuse = Vvalid;
+  }
+  if(Uvalid==0&&Vvalid==0){
+    Xuse = 0;
+    Uuse = 1;
+    Vuse = 1;
+  }
+  if(uv_fit==0){
+    Xuse = 1; Uuse = 1; Vuse = 1;
+  }
+  if(Xuse==1){
+    layeruse[0] = layeron[0]; layeruse[1] = layeron[1]; layeruse[6] = layeron[6]; layeruse[7] = layeron[7];
+  }
+  if(Uuse==1){
+    layeruse[2] = layeron[2]; layeruse[4] = layeron[4];
+  }
+  if(Vuse==1){
+    layeruse[3] = layeron[3]; layeruse[5] = layeron[5];
+  }
+  if(Uvalid==0&&Vvalid==0&&uv_fit==3){
+    Xuse = 0;
+    mx = (layerslope[0]*layeron[0]+layerslope[1]*layeron[1]+layerslope[6]*layeron[6]+layerslope[7]*layeron[7])/1.0/(layeron[0]+layeron[1]+layeron[6]+layeron[7]);
+    if(ForLofU(layerslope[2],layerslope[4],layerslope[3],layerslope[5],mx,etaslopewidth)==0){
+      layeruse[2] = layeron[2]; layeruse[4] = 0;
+    }
+    if(ForLofU(layerslope[2],layerslope[4],layerslope[3],layerslope[5],mx,etaslopewidth)==1){
+      layeruse[2] = 0; layeruse[4] = layeron[4];
+    }
+    if(ForLofU(layerslope[2],layerslope[4],layerslope[3],layerslope[5],mx,etaslopewidth)==-1){
+      layeruse[2] = layeron[2]; layeruse[4] = layeron[4];
+    }//fix
+    if(ForLofV(layerslope[2],layerslope[4],layerslope[3],layerslope[5],mx,etaslopewidth)==0){
+      layeruse[3] = layeron[3]; layeruse[5] = 0;
+    }
+    if(ForLofV(layerslope[2],layerslope[4],layerslope[3],layerslope[5],mx,etaslopewidth)==1){
+      layeruse[3] = 0; layeruse[5] = layeron[5];
+    }
+    if(ForLofV(layerslope[2],layerslope[4],layerslope[3],layerslope[5],mx,etaslopewidth)==-1){
+      layeruse[3] = layeron[3]; layeruse[5] = layeron[5];
+    }//fix
+  }
+  if(nU==0||nV==0){
+    Xuse = 1; Uuse = 0; Vuse = 0;
+    layeruse[0] = layeron[0]; layeruse[1] = layeron[1]; layeruse[6] = layeron[6]; layeruse[7] = layeron[7];
+    if(nU>=1){
+      Uuse = 1;
+      layeruse[2] = layeron[2]; layeruse[4] = layeron[4];
+    }
+    if(nV>=1){
+      Vuse = 1;
+      layeruse[3] = layeron[3]; layeruse[5] = layeron[5];
+    }
+  }//add
+
+
+  //coeff //fixed
+  nXuse = layeruse[0]+layeruse[1]+layeruse[6]+layeruse[7];
+  nUuse = layeruse[2]+layeruse[4];
+  nVuse = layeruse[3]+layeruse[5];
+
+  if(nXuse>=1){Xuse = 1;}else{Xuse = 0;}
+  if(nUuse>=1){Uuse = 1;}else{Uuse = 0;}
+  if(nVuse>=1){Vuse = 1;}else{Vuse = 0;}//add
+
+  if(Xuse==1){
+    if(Uuse==1&&Vuse==0){layercoeff[0] = -1.0/nXuse; layercoeff[1] = -1.0/nXuse; layercoeff[6] = -1.0/nXuse; layercoeff[7] = -1.0/nXuse;}
+    if(Uuse==0&&Vuse==1){layercoeff[0] = 1.0/nXuse; layercoeff[1] = 1.0/nXuse; layercoeff[6] = 1.0/nXuse; layercoeff[7] = 1.0/nXuse;}
+    if(Uuse==1&&Vuse==1){
+      mx = (layerslope[0]*layeruse[0]+layerslope[1]*layeruse[1]+layerslope[6]*layeruse[6]+layerslope[7]*layeruse[7])/1.0/nXuse;
+      mu = (layerslope[2]*layeruse[2]+layerslope[4]*layeruse[4])/1.0/nUuse;
+      mv = (layerslope[3]*layeruse[3]+layerslope[5]*layeruse[5])/1.0/nVuse;
+      layercoeff[0] = (mu-mv)/mx/4.0/nXuse; layercoeff[1] = (mu-mv)/mx/4.0/nXuse; layercoeff[6] = (mu-mv)/mx/4.0/nXuse; layercoeff[7] = (mu-mv)/mx/4.0/nXuse;
+    }
+  }
+  if(Uuse==1){
+    if(Xuse==1&&Vuse==0){layercoeff[2] = 1.0/nUuse; layercoeff[4] = 1.0/nUuse;}
+    if(Xuse==0&&Vuse==1){layercoeff[2] = 0.5/nUuse; layercoeff[4] = 0.5/nUuse;}
+    if(Xuse==1&&Vuse==1){layercoeff[2] = 0.5/nUuse; layercoeff[4] = 0.5/nUuse;}
+  }
+  if(Vuse==1){
+    if(Xuse==1&&Uuse==0){layercoeff[3] = -1.0/nVuse; layercoeff[5] = -1.0/nVuse;}
+    if(Xuse==0&&Uuse==1){layercoeff[3] = -0.5/nVuse; layercoeff[5] = -0.5/nVuse;}
+    if(Xuse==1&&Uuse==1){layercoeff[3] = -0.5/nVuse; layercoeff[5] = -0.5/nVuse;}
+  }
+
+  //grade //fixed
+  if(uv_fit==3){
+    if(nU==2&&nV==2){
+      if(Uvalid==1&&Vvalid==1)grade = 3;
+      if(Uvalid+Vvalid==1)grade = 2;
+      if(Uvalid==0&&Vvalid==0){
+	if(nUuse==1&&nVuse==1){
+	  grade = 1;
+	}else{
+	  grade = 0;
+	}
+      }
+    }
+    if((nU==2&&nV==1)||(nU==1&&nV==2)){
+      if(Uvalid+Vvalid==1)grade = 2;
+      if(Uvalid==0&&Vvalid==0){
+	if(nUuse==1&&nVuse==1){
+          grade = 1;
+        }else{
+          grade = 0;
+        } 
+      }
+    }
+    if((nUuse==2&&nVuse==0)||(nUuse==0&&nVuse==2)){
+      if(Uvalid+Vvalid==1)grade = 3;
+      if(Uvalid==0&&Vvalid==0)grade = 0;
+    }
+    if(nU==1&&nV==1){
+      grade = 0;
+    }
+    if((nU==1&&nV==0)||(nU==0&&nV==1)){
+      grade = 0;
+    }
+  }
+  *Grade = grade;
+  *U_valid = Uvalid;
+  *V_valid = Vvalid;
+  *xuse = Xuse;
+
+  for(int d=0;d<8;d++){
+    *layerbit = layeruse[d];
+    *phicoeff = layercoeff[d];
+
+    ++layerbit;
+    ++phicoeff;
+
+  }
+
+
+}
+
+
+
 
 
 double interseclX(double a1, double b1, double c1, double a2, double b2, double c2, double z) {
@@ -164,8 +391,6 @@ void trackFunction(int& nDim, double* gout, double& result, double par[], int fl
 
   result = sum;
 }
-
-
 
 
 void minuitFunction(int& nDim, double* gout, double& result, double par[], int flg) {
@@ -265,11 +490,14 @@ void difalpha(){
   const int bg = atoi(getenv("BG"));
   int nvertexcrit = 0;
   if(bg==1) nvertexcrit = 100000;
-  const int uvfit = 1;//"0" meancs no cut for UV, "1" means 2U(2V) is valid but 1U(1V) is not valid, "2" means 2U(2V) and these two < etaslopewidth is valid.  
+  const int h_check = 1;
+  const int uvfit = 2;//using all XUV, "1" means no cut UV fit, "2" means demanding 2U(2V) and these two < etaslopewidth/2.0.
+  //"3" means add to "2" method, taking coincidence with X
   const double slopewidth = atof(getenv("ETASLOPEWIDTH"));
   const int robust = 0;//robust algorithm
   const int majority = 0;//majority algorithm
-  const int analytic = 1;//analytic 2d(Xonly) fit  
+  const int analytic = 1;//analytic 2d(Xonly) fit
+  const int takemean = 1;  
   const int l3d = 1;//calculate local_3d
   const double drcutin = 1;//for tight cut of the signal from secondary particles  The unit is mm.
   const int Ndata = atoi(getenv("NDATA"));
@@ -277,6 +505,7 @@ void difalpha(){
   //0:tie mu start-point with mu end-point 1:fit for all mupoints 2:treat as curve 
   const int UVtruth = 1; //0:easy virtual plain (in R-Z 2d plane)  1:virtual plain (calculated in 3d)
   const int Xtruth = 1; //0:chi^2 fit 1:virtual plain 
+  const int maxs = 4; //timewindow max = nBC
   //constant----------------------------
   const double pi = TMath::Pi();
   const double lowPtedge = 80000;
@@ -284,8 +513,10 @@ void difalpha(){
   if(bg==0) cout<<"Single Mu"<<endl;
   if(bg==1) cout<<"BG"<<endl;
   if(uvfit==0) cout<<"xuvfit"<<endl;
-  if(uvfit==1) cout<<"uvfit"<<endl;
-  if(uvfit==2) cout<<"exceeding uvfit"<<endl;
+  if(uvfit==1) cout<<"no cut uvfit"<<endl;
+  if(uvfit==2) cout<<"same as board uvfit"<<endl;
+  if(uvfit==3) cout<<"exceeding uvfit"<<endl;
+  if(uvfit==4) cout<<"outlier eliminate"<<endl;
 
   //Plate  
   double error;
@@ -326,6 +557,7 @@ void difalpha(){
   //vector def
   vector<double> xofe(4);
   vector<double> yofe(4);
+  vector<double> aofe(4);
   vector<double> xyofe(4);
   vector<int> dofe(4);
   vector<int> dofs(4);
@@ -358,6 +590,13 @@ void difalpha(){
   }
 
   //for diffuse
+  double mx = 0;
+  int nofmx = 0;
+  int uvuse = 0;
+  double u1 = 0;
+  double u2 = 0;
+  double v1 = 0;
+  double v2 = 0;
   int nmu[33];
   double mur[33];
   double mut[33];
@@ -420,11 +659,11 @@ void difalpha(){
 
 
 
-  cout <<"Please Enter the Filename before \".root\""<<endl;
+  //cout <<"Please Enter the Filename before \".root\""<<endl;
   strcpy(namecore,getenv("NAMECORE"));
+  cout<<"NAMECORE = "<<namecore<<endl;
   drcut = atof(getenv("DRCUT"));
-  TFile *filefast = new TFile(Form("%sfast.root",namecore));
-  TTree *tree = (TTree*)filefast->Get("fast");
+  cout<<"drcut"<<drcut<<endl;
 
   char *ret;
   char namefordata[200] = "";
@@ -434,12 +673,28 @@ void difalpha(){
     int namecorelength = strlen(Form("%s",namecore));
     strncat(namefordata,Form("%s",namecore),namecorelength-drcutlength);
   }else{
-    strcat(namefordata,Form("%s",namecore));
-    //drcut = 1000000;
+    //drcut = 1000000;  
+    ret = strstr(Form("%s",namecore),"trig");
+    if(ret!=NULL){
+      int triggertypelength = strlen(Form("%s",ret));
+      int namecorelength = strlen(Form("%s",namecore));
+      strncat(namefordata,Form("%s",namecore),namecorelength-triggertypelength);
+    }else{
+      ret = strstr(Form("%s",namecore),"alg");
+      if(ret!=NULL){
+        int algoptionlength = strlen(Form("%s",ret));
+        int namecorelength = strlen(Form("%s",namecore));
+        strncat(namefordata,Form("%s",namecore),namecorelength-algoptionlength);
+      }else{
+	strcat(namefordata,Form("%s",namecore));
+      }
+    }
   }
+  cout<<"Open "<<namefordata<<"memo.root"<<endl;
   TFile *filememo = new TFile(Form("%smemo.root",namefordata));
   TTree *memo = (TTree*)filememo->Get("memo");
-  TFile *file2[Ndata];
+  /*TFile *file2[Ndata];
+  cout<<"Open "<<namefordata<<".root"<<endl;
   file2[0] = new TFile(Form("%s.root",namefordata));
   for(int d=1;d<Ndata;d++){
     file2[d] = new TFile(Form("%s_%d.root",namefordata,d));
@@ -453,11 +708,23 @@ void difalpha(){
     Ninc += data->GetEntries();
   }
   TTree *data = (TTree*)file2[0]->Get("NSWHitsTree");
-  if(memo->GetEntries()!=Ninc)cout<<"Sum up Error!!"<<endl;
+  if(memo->GetEntries()!=Ninc)cout<<"Sum up Error!!"<<endl;*/
+  int Ninc = memo->GetEntries();
   TCanvas *c4 = new TCanvas("");
   TCanvas *c5 = new TCanvas("");
 
 
+  char nameforfast[300] = "";
+  ret = strstr(Form("%s",namecore),"alg");
+  if(ret!=NULL){
+    int algoptionlength = strlen(Form("%s",ret));
+    int namecorelength = strlen(Form("%s",namecore));
+    strncat(nameforfast,Form("%s",namecore),namecorelength-algoptionlength);
+  }else{
+    strcat(nameforfast,Form("%s",namecore));
+  }
+  TFile *filefast = new TFile(Form("%sfast.root",nameforfast));
+  TTree *tree = (TTree*)filefast->Get("fast");
 
   //Treesetting
   double hitphi0[33] = {0};
@@ -538,21 +805,21 @@ void difalpha(){
 
   int efef[33]={0};
   //layer
-  int ef[33][3]={{0}};
+  int ef[33][maxs]={{0}};
   //layer:time
 
-  int en[5][3]={{0}};
+  int en[5][maxs]={{0}};
   //neta:time (8 layer hit 4 stereo layer hit) 
-  int esn[5][5][3]={{{0}}};
+  int esn[5][5][maxs]={{{0}}};
   //neta:nstereo:time (8 layer hit 4 stereo layer hit) 
-  double esdelta[5][5][3]={{{0}}};
-  double edelta[5][3]={{0}};
-  double hit_esdelta[5][5][3]={{{0}}};
-  double hit_edelta[5][3]={{0}};
-  double sigma_sltheta[5][5][3]={{{0}}};
-  double sigma_ltheta[5][3]={{0}};
-  double sigma_sgtheta[5][5][3]={{{0}}};
-  double sigma_gtheta[5][3]={{0}};
+  double esdelta[5][5][maxs]={{{0}}};
+  double edelta[5][maxs]={{0}};
+  double hit_esdelta[5][5][maxs]={{{0}}};
+  double hit_edelta[5][maxs]={{0}};
+  double sigma_sltheta[5][5][maxs]={{{0}}};
+  double sigma_ltheta[5][maxs]={{0}};
+  double sigma_sgtheta[5][5][maxs]={{{0}}};
+  double sigma_gtheta[5][maxs]={{0}};
 
   int def[33]={0};//denomi of each
   //layer
@@ -581,7 +848,7 @@ void difalpha(){
   //for fitting
 
   int nfast = tree->GetEntries();
-  nevent = data->GetEntries();
+  nevent = memo->GetEntries();
   cout<<nfast<<"nfast"<<endl;
   cout<<Ninc<<"all events"<<endl; 
 
@@ -657,7 +924,7 @@ void difalpha(){
   double e[16]={0};
   int first_eta[33] = {0};
 
-  if(fixon==0){
+  /*if(fixon==0){
     vector<int> *PDGID =0;
     vector<double> *Hits_kineticEnergy=0;
     vector<double> *Hits_DirectionZ=0;
@@ -695,12 +962,12 @@ void difalpha(){
 
   TF1 *func = new TF1("f","[0]*TMath::Erfc([1]*(x-[2]))");
 
-  for(int l=-8;l<8;l++){
+  for(int ll=-8;ll<8;ll++){
     for(int d=0;d<8;d++){
-      func->SetParameters(phihist[d]->GetBinContent(phihist[d]->GetMaximumBin())/2.0,30*pow(-1,l),(2*l+1)/16.0*pi);
+      func->SetParameters(phihist[d]->GetBinContent(phihist[d]->GetMaximumBin())/2.0,30*pow(-1,ll),(2*ll+1)/16.0*pi);
       func->SetParLimits(0,phihist[d]->GetBinContent(phihist[d]->GetMaximumBin())/4.0,phihist[d]->GetBinContent(phihist[d]->GetMaximumBin())/2.0);
-      func->SetParLimits(2,2*l/16.0*pi,2*(l+1)/16.0*pi);
-      phihist[d]->Fit("f","Q","goff",2*l/16.0*pi,2*(l+1)/16.0*pi);
+      func->SetParLimits(2,2*ll/16.0*pi,2*(ll+1)/16.0*pi);
+      phihist[d]->Fit("f","Q","goff",2*ll/16.0*pi,2*(ll+1)/16.0*pi);
       cout<<"laC_side"<<d-16<<endl;
       a = func->GetParameter(1);
       errora = func->GetParError(1);
@@ -709,16 +976,16 @@ void difalpha(){
       error = sqrt(error*error+per*per*errora*errora/a/a/a/a);
       w[d] = error*error;
       cout<<func->GetChisquare()/func->GetNDF()<<endl;
-      phibound[l+8][0]=TMath::Mean(8,&v[0]);
+      phibound[ll+8][0]=TMath::Mean(8,&v[0]);
     }
   }
 
-  for(int l=-8;l<8;l++){
+  for(int ll=-8;ll<8;ll++){
     for(int d=8;d<16;d++){
-      func->SetParameters(phihist[d]->GetBinContent(phihist[d]->GetMaximumBin())/2.0,-30*pow(-1,l),(2*l+1)/16.0*pi);
+      func->SetParameters(phihist[d]->GetBinContent(phihist[d]->GetMaximumBin())/2.0,-30*pow(-1,ll),(2*ll+1)/16.0*pi);
       func->SetParLimits(0,phihist[d]->GetBinContent(phihist[d]->GetMaximumBin())/4.0,phihist[d]->GetBinContent(phihist[d]->GetMaximumBin())/2.0);
-      func->SetParLimits(2,2*l/16.0*pi,2*(l+1)/16.0*pi);
-      phihist[d]->Fit("f","Q","goff",2*l/16.0*pi,2*(l+1)/16.0*pi);
+      func->SetParLimits(2,2*ll/16.0*pi,2*(ll+1)/16.0*pi);
+      phihist[d]->Fit("f","Q","goff",2*ll/16.0*pi,2*(ll+1)/16.0*pi);
       cout<<"smC_side"<<d-16<<endl;
       a = func->GetParameter(1);
       errora = func->GetParError(1);
@@ -728,16 +995,16 @@ void difalpha(){
       w[d-8] = error*error;
 
       cout<<func->GetChisquare()/func->GetNDF()<<endl;
-      phibound[l+8][1]=TMath::Mean(8,&v[0]);
+      phibound[ll+8][1]=TMath::Mean(8,&v[0]);
     }
   }
 
-  for(int l=-8;l<8;l++){
+  for(int ll=-8;ll<8;ll++){
     for(int d=17;d<25;d++){
-      func->SetParameters(phihist[d]->GetBinContent(phihist[d]->GetMaximumBin())/2.0,-30*pow(-1,l),(2*l+1)/16.0*pi);
+      func->SetParameters(phihist[d]->GetBinContent(phihist[d]->GetMaximumBin())/2.0,-30*pow(-1,ll),(2*ll+1)/16.0*pi);
       func->SetParLimits(0,phihist[d]->GetBinContent(phihist[d]->GetMaximumBin())/4.0,phihist[d]->GetBinContent(phihist[d]->GetMaximumBin())/2.0);
-      func->SetParLimits(2,2*l/16.0*pi,2*(l+1)/16.0*pi);
-      phihist[d]->Fit("f","Q","goff",2*l/16.0*pi,2*(l+1)/16.0*pi);
+      func->SetParLimits(2,2*ll/16.0*pi,2*(ll+1)/16.0*pi);
+      phihist[d]->Fit("f","Q","goff",2*ll/16.0*pi,2*(ll+1)/16.0*pi);
       cout<<"smA_side"<<d-16<<endl;
       a = func->GetParameter(1);
       errora = func->GetParError(1);
@@ -746,17 +1013,17 @@ void difalpha(){
       error =sqrt(error*error+per*per*errora*errora/a/a/a/a);
       w[d-17] = error*error;
       cout<<func->GetChisquare()/func->GetNDF()<<endl;
-      phibound[l+8][2]=TMath::Mean(8,&v[0]);
+      phibound[ll+8][2]=TMath::Mean(8,&v[0]);
     }
   }
 
 
-  for(int l=-8;l<8;l++){
+  for(int ll=-8;ll<8;ll++){
     for(int d=25;d<33;d++){
-      func->SetParameters(phihist[d]->GetBinContent(phihist[d]->GetMaximumBin())/2.0,30*pow(-1,l),(2*l+1)/16.0*pi);
+      func->SetParameters(phihist[d]->GetBinContent(phihist[d]->GetMaximumBin())/2.0,30*pow(-1,ll),(2*ll+1)/16.0*pi);
       func->SetParLimits(0,phihist[d]->GetBinContent(phihist[d]->GetMaximumBin())/4.0,phihist[d]->GetBinContent(phihist[d]->GetMaximumBin())/2.0);
-      func->SetParLimits(2,2*l/16.0*pi,2*(l+1)/16.0*pi);
-      phihist[d]->Fit("f","Q","goff",2*l/16.0*pi,2*(l+1)/16.0*pi);
+      func->SetParLimits(2,2*ll/16.0*pi,2*(ll+1)/16.0*pi);
+      phihist[d]->Fit("f","Q","goff",2*ll/16.0*pi,2*(ll+1)/16.0*pi);
       cout<<"laA_side"<<d-16<<endl;
       a = func->GetParameter(1);
       errora = func->GetParError(1);
@@ -765,7 +1032,7 @@ void difalpha(){
       error =sqrt(error*error+per*per*errora*errora/a/a/a/a);
       w[d-25] = error*error;
       cout<<func->GetChisquare()/func->GetNDF()<<endl;
-      phibound[l+8][3]=TMath::Mean(8,&v[0]);
+      phibound[ll+8][3]=TMath::Mean(8,&v[0]);
     }
   }
   
@@ -854,7 +1121,7 @@ void difalpha(){
       }
     }
   }
-  }
+  }*/
 
   if(fixon==1){
     generaletabound[0][0] = 0;
@@ -918,12 +1185,10 @@ void difalpha(){
   int platenf=0;
   int platesnf=0;
   int plateneta=0;
-  int Uon = 0;
-  int Von = 0;
-  int Ulegit = 0;
-  int Vlegit = 0;
+  int Xuse = 0;
   int Uvalid = 0;
   int Vvalid = 0;
+  int grade = 0;
   double URZmemory = 0;
   double VRZmemory = 0;
   int plateth=0;//through
@@ -945,6 +1210,7 @@ void difalpha(){
   double plateentrytheta=0;
   double platephi0=0;
   double plateentryphi=0;
+  int passband=0;
   double dr2d=0;
   double piphi=0;
   vector<double> plateresid2dl(4);
@@ -972,7 +1238,7 @@ void difalpha(){
   double strip_zmemory=0;
   double hit_dphi=0;
   double dt2d=0;
-  double platetimewindow = 0;
+  int platetimewindow = 0;
   double estimated_phifraction=0;
   double rhat=0;
   int platesector=0;
@@ -987,7 +1253,15 @@ void difalpha(){
   int dplus = 0;
   int dminus = 0;
   double dialphi = 0;
+  vector<int> prelayerd(10);
+  prelayerd.erase(prelayerd.begin(),prelayerd.end());
+  vector<double> prelayerslope(10);
+  prelayerslope.erase(prelayerslope.begin(),prelayerslope.end()); 
+  int layerbit[8] = {0};
+  double phicoeff[8] = {0};
 
+  vector<int> vec_band(300);
+  vector<int> vec_passband(300);
   vector<double> vec_dr2d(300);
   vector<double> vec_zintercept(300);
   vector<double> vec_rintercept(300);
@@ -999,7 +1273,7 @@ void difalpha(){
   vector<double> vec_gphi3d(300);
   vector<double> vec_zintercept3d(300);
   vector<double> vec_strip_phimemory(300);
-  vector<double> vec_timewindow(300);
+  vector<int> vec_timewindow(300);
   vector<int> vec_nlayer(300);
   vector<int> vec_nUV(300);
   vector<int> vec_nX(300);
@@ -1011,6 +1285,7 @@ void difalpha(){
   vector<int> vec_PhiXpat(300);
   vector<int> vec_Uvalid(300);
   vector<int> vec_Vvalid(300);
+  vector<int> vec_grade(300);
   vector<double> vec_estimated_phifraction(300);
   vector<int> vec_sector(300);
   vector<int> vec_sectoron(300);
@@ -1030,6 +1305,15 @@ void difalpha(){
   vector<double> vec_hit_gphi3d(300);
   vector<double> vec_hit_phimemory(300);
   vector<double> vec_hit_thetamemory(300);
+  vector<vector<int> > vecvec_layer(300, vector<int>(8));
+  vector<vector<double> > vecvec_dr0(300, vector<double>(8));
+  vector<vector<int> > vecvec_Xlayer(300, vector<int>(8));
+  vector<vector<double> > vecvec_Xdr0(300, vector<double>(8));
+  vector<vector<int> > vecvec_Philayer(300, vector<int>(8));
+  vector<vector<double> > vecvec_Phidr0(300, vector<double>(8));
+  vector<vector<double> > vecvec_Phicoeff(300, vector<double>(8));
+  vec_band.erase(vec_band.begin(),vec_band.end());
+  vec_passband.erase(vec_passband.begin(),vec_passband.end());
   vec_dr2d.erase(vec_dr2d.begin(),vec_dr2d.end());
   vec_zintercept3d.erase(vec_zintercept3d.begin(),vec_zintercept3d.end());
   vec_zintercept.erase(vec_zintercept.begin(),vec_zintercept.end());
@@ -1053,6 +1337,7 @@ void difalpha(){
   vec_PhiXpat.erase(vec_PhiXpat.begin(),vec_PhiXpat.end());
   vec_Uvalid.erase(vec_Uvalid.begin(),vec_Uvalid.end());
   vec_Vvalid.erase(vec_Vvalid.begin(),vec_Vvalid.end());
+  vec_grade.erase(vec_grade.begin(),vec_grade.end());
   vec_estimated_phifraction.erase(vec_estimated_phifraction.begin(),vec_estimated_phifraction.end());
   vec_sector.erase(vec_sector.begin(),vec_sector.end());
   vec_sectoron.erase(vec_sectoron.begin(),vec_sectoron.end());
@@ -1071,6 +1356,13 @@ void difalpha(){
   vec_hit_gphi3d.erase(vec_hit_gphi3d.begin(),vec_hit_gphi3d.end());
   vec_hit_phimemory.erase(vec_hit_phimemory.begin(),vec_hit_phimemory.end());
   vec_hit_thetamemory.erase(vec_hit_thetamemory.begin(),vec_hit_thetamemory.end());
+  vecvec_dr0.erase(vecvec_dr0.begin(),vecvec_dr0.end());
+  vecvec_layer.erase(vecvec_layer.begin(),vecvec_layer.end());
+  vecvec_Xdr0.erase(vecvec_Xdr0.begin(),vecvec_Xdr0.end());
+  vecvec_Xlayer.erase(vecvec_Xlayer.begin(),vecvec_Xlayer.end());
+  vecvec_Phidr0.erase(vecvec_Phidr0.begin(),vecvec_Phidr0.end());
+  vecvec_Philayer.erase(vecvec_Philayer.begin(),vecvec_Philayer.end());
+  vecvec_Phicoeff.erase(vecvec_Phicoeff.begin(),vecvec_Phicoeff.end());
 
   d3->Branch("ndata",&platendata);
   d3->Branch("i",&platei);
@@ -1082,6 +1374,8 @@ void difalpha(){
   d3->Branch("entrytheta",&plateentrytheta);
   d3->Branch("phi0",&platephi0);
   d3->Branch("entryphi",&plateentryphi);
+  d3->Branch("band",&vec_band);
+  d3->Branch("passband",&vec_passband);
   d3->Branch("dr2d",&vec_dr2d);
   d3->Branch("zcept",&vec_zintercept);
   d3->Branch("rcept",&vec_rintercept);
@@ -1126,6 +1420,14 @@ void difalpha(){
   d3->Branch("etadr0",&vec_etadr0);
   d3->Branch("tmin",&vec_tmin);
   d3->Branch("fakeornot",&vec_fakeornot);
+  d3->Branch("dr0pat",&vecvec_dr0);
+  d3->Branch("layerpat",&vecvec_layer);
+  d3->Branch("Xdr0pat",&vecvec_Xdr0);
+  d3->Branch("Xlayerpat",&vecvec_Xlayer);
+  d3->Branch("Phidr0pat",&vecvec_Phidr0);
+  d3->Branch("Philayerpat",&vecvec_Philayer);
+  d3->Branch("Phicoeff",&vecvec_Phicoeff);
+  d3->Branch("grade",&vec_grade);
   cut = Ninc;
 
   int firsttime = 0;
@@ -1142,7 +1444,9 @@ void difalpha(){
   int Xsecond = 0;
   int Xfirston = 0;
   int UVfirston = 0;
-  int Xsecondon = 0; 
+  int Xsecondon = 0;
+  int l=0;
+  int k=0; 
 
   n = 0;
   int m = 0;
@@ -1160,7 +1464,8 @@ void difalpha(){
     if((n+1)%100000 == 0) cout<<(n+1)/1.0/Ninc<<endl;
 
     on = 0;    
-
+    vec_band.erase(vec_band.begin(),vec_band.end());
+    vec_passband.erase(vec_passband.begin(),vec_passband.end());
     vec_dr2d.erase(vec_dr2d.begin(),vec_dr2d.end());
     vec_zintercept.erase(vec_zintercept.begin(),vec_zintercept.end());
     vec_rintercept.erase(vec_rintercept.begin(),vec_rintercept.end());
@@ -1184,6 +1489,7 @@ void difalpha(){
     vec_PhiXpat.erase(vec_PhiXpat.begin(),vec_PhiXpat.end());
     vec_Uvalid.erase(vec_Uvalid.begin(),vec_Uvalid.end());
     vec_Vvalid.erase(vec_Vvalid.begin(),vec_Vvalid.end());
+    vec_grade.erase(vec_grade.begin(),vec_grade.end());
     vec_estimated_phifraction.erase(vec_estimated_phifraction.begin(),vec_estimated_phifraction.end());
     vec_sector.erase(vec_sector.begin(),vec_sector.end());
     vec_sectoron.erase(vec_sectoron.begin(),vec_sectoron.end());
@@ -1202,13 +1508,20 @@ void difalpha(){
     vec_hit_gphi3d.erase(vec_hit_gphi3d.begin(),vec_hit_gphi3d.end());
     vec_hit_phimemory.erase(vec_hit_phimemory.begin(),vec_hit_phimemory.end());
     vec_hit_thetamemory.erase(vec_hit_thetamemory.begin(),vec_hit_thetamemory.end());
-
+    vecvec_dr0.erase(vecvec_dr0.begin(),vecvec_dr0.end());
+    vecvec_layer.erase(vecvec_layer.begin(),vecvec_layer.end());
+    vecvec_Xdr0.erase(vecvec_Xdr0.begin(),vecvec_Xdr0.end());
+    vecvec_Xlayer.erase(vecvec_Xlayer.begin(),vecvec_Xlayer.end());
+    vecvec_Phidr0.erase(vecvec_Phidr0.begin(),vecvec_Phidr0.end());
+    vecvec_Philayer.erase(vecvec_Philayer.begin(),vecvec_Philayer.end());
+    vecvec_Phicoeff.erase(vecvec_Phicoeff.begin(),vecvec_Phicoeff.end());
     while(n == i){//while ni start
       cout<<"i"<<i<<endl;
       platendata = ndata;
+      if(truthcheck == 0)passband = 0;
       cout<<ndata<<endl;
       firsttime = 0;//for hit tracking
-      if(truthcheck == 0){
+      if(truthcheck == 0){//means ni while first time
 	if(checkexp==1)cout<<"truthcheck"<<endl;//check2
       	truthcheck = 1;
 	memo->GetEntry(n);
@@ -1339,7 +1652,7 @@ void difalpha(){
 		}
 		}*/
 	  
-	  for(int s=0;s<3;s++){
+	  for(int s=0;s<maxs;s++){
 	    platetimewindow = 25*(s+1);
 	    if(checkexp==1){
 	      if(allhitsectoron[0]==1)cout<<"sm"<<endl;
@@ -1352,12 +1665,12 @@ void difalpha(){
 	    }
 	    platenf = 0;
 	    platesnf = 0;
-	    Uon = 0;
-	    Ulegit = 0;
+	    prelayerd.erase(prelayerd.begin(),prelayerd.end());
+	    prelayerslope.erase(prelayerslope.begin(),prelayerslope.end());
+	    Xuse = 0;
+	    grade = 0;
 	    Uvalid = 0;
 	    URZmemory = 0;
-	    Von = 0;
-	    Vlegit = 0;
 	    Vvalid = 0;
 	    VRZmemory = 0;
 	    for(int d=0;d<33;d++){
@@ -1367,7 +1680,6 @@ void difalpha(){
 		  platenf += 1;
 		  if(layersign[d]!=0){
 		    platesnf += 1;
-		    if(layersign[d]==1){Uon = 1; Ulegit = 1;}else{Von = 1; Vlegit = 1;} 
 		  }
 		}
 	      }
@@ -1388,6 +1700,7 @@ void difalpha(){
 	    xofe.erase(xofe.begin(),xofe.end());
 	    yofe.erase(yofe.begin(),yofe.end());
 	    xyofe.erase(xyofe.begin(),xyofe.end());
+	    aofe.erase(aofe.begin(),aofe.end());
 	    dofe.erase(dofe.begin(),dofe.end());
 	    x3d.erase(x3d.begin(),x3d.end());
 	    y3d.erase(y3d.begin(),y3d.end());
@@ -1406,801 +1719,782 @@ void difalpha(){
 	    platedr0 = 0;
 	    plateetadr0 = 0;
 	    platetmin = 0;
-	    fakeornot = 1;	    
-
+	    fakeornot = 1;
+	    
 	    for(int c=0;c<10;c++){
 	      l1ofe.at(c)=0;
 	      l2ofe.at(c)=0;      
 	      l3ofe.at(c)=0;
 	    }
-	    
-	    for(int l=2;l<5;l++){
-	      if(platenf-platesnf==l){
+
+	    l = platenf-platesnf;
+	    k = platesnf;
+	    if(l>=2&&l<=4){
+	      if(k>=1&&k<=4){
 		en[l][s] += 1;
-		for(int k=1;k<5;k++){
-		  if(platesnf==k){
-		    esn[l][k][s] += 1;
+		esn[l][k][s] += 1;
+		vecvec_dr0.push_back(vector<double>(8));
+		vecvec_layer.push_back(vector<int>(8));
+		vecvec_Xdr0.push_back(vector<double>(8));
+		vecvec_Xlayer.push_back(vector<int>(8));
+		vecvec_Phidr0.push_back(vector<double>(8));
+		vecvec_Philayer.push_back(vector<int>(8));
+		vecvec_Phicoeff.push_back(vector<double>(8));
+		vecvec_dr0.at(vecvec_dr0.size()-1).erase(vecvec_dr0.at(vecvec_dr0.size()-1).begin(),vecvec_dr0.at(vecvec_dr0.size()-1).end());
+		vecvec_layer.at(vecvec_layer.size()-1).erase(vecvec_layer.at(vecvec_layer.size()-1).begin(),vecvec_layer.at(vecvec_layer.size()-1).end());
+		vecvec_Xdr0.at(vecvec_Xdr0.size()-1).erase(vecvec_Xdr0.at(vecvec_Xdr0.size()-1).begin(),vecvec_Xdr0.at(vecvec_Xdr0.size()-1).end());
+		vecvec_Xlayer.at(vecvec_Xlayer.size()-1).erase(vecvec_Xlayer.at(vecvec_Xlayer.size()-1).begin(),vecvec_Xlayer.at(vecvec_Xlayer.size()-1).end());
+		vecvec_Phidr0.at(vecvec_Phidr0.size()-1).erase(vecvec_Phidr0.at(vecvec_Phidr0.size()-1).begin(),vecvec_Phidr0.at(vecvec_Phidr0.size()-1).end());
+		vecvec_Philayer.at(vecvec_Philayer.size()-1).erase(vecvec_Philayer.at(vecvec_Philayer.size()-1).begin(),vecvec_Philayer.at(vecvec_Philayer.size()-1).end());
+		vecvec_Phicoeff.at(vecvec_Phicoeff.size()-1).erase(vecvec_Phicoeff.at(vecvec_Phicoeff.size()-1).begin(),vecvec_Phicoeff.at(vecvec_Phicoeff.size()-1).end());
 
-		    if(uvfit==2){
-		      Ulegit = 0;
-		      Vlegit = 0;
-		      Uvalid = 0;
-		      Vvalid = 0;
-		      URZmemory = 0;
-		      VRZmemory = 0;
-		      for(int d=0;d<33;d++){
-			if(time[d]!=0 && time[d] < 25*(s+1) && layeron[d]==1){
-			  //cout<<d<<endl;
-			  if(layersign[d]!=0){
-			    phifraction = atan2(y[d],x[d]);
-                            if(abs(d-16)>8){
-                              while( abs(phifraction) > pi/8.0 ){
-                                if(phifraction>0){ phifraction -= pi/4.0;
-                                }else{ phifraction += pi/4.0;}
-                              }
-                            }else{
-                              phifraction += pi/8.0;
-                              while( abs(phifraction) > pi/8.0 ){
-                                if(phifraction>0){ phifraction -= pi/4.0;
-                                }else{ phifraction += pi/4.0; }
-                              }
-                            }
-			    if(layersign[d]==1){
-			      if(URZmemory != 0){
-				cout<<URZmemory-hypot(x[d],y[d])*(cos(phifraction)+layersign[d]*sin(strip_phifraction)*tan(1.5*pi/180))/layerz[d]<<" : "<<slopewidth/2.0<<endl;
-				if(fabs(hypot(x[d],y[d])*(cos(phifraction)+layersign[d]*sin(strip_phifraction)*tan(1.5*pi/180))/layerz[d]-URZmemory)<=slopewidth/2.0){
-				  Ulegit = 1;
-				  Uvalid = 1;
-				} 
-			      }
-			      URZmemory = hypot(x[d],y[d])*(cos(phifraction)+layersign[d]*sin(strip_phifraction)*tan(1.5*pi/180))/layerz[d];
-			    }
-			    if(layersign[d]==-1){
-			      if(VRZmemory != 0){
-				if(fabs(hypot(x[d],y[d])*(cos(phifraction)+layersign[d]*sin(strip_phifraction)*tan(1.5*pi/180))/layerz[d]-VRZmemory)<=slopewidth/2.0){
-				  Vlegit = 1;
-				  Vvalid = 1;
-				}
-			      }
-                              VRZmemory = hypot(x[d],y[d])*(cos(phifraction)+layersign[d]*sin(strip_phifraction)*tan(1.5*pi/180))/layerz[d];
-                            }
-			  }
-			}
-		      }
-		      if(Ulegit==0&&Vlegit==0){
-			Ulegit = 1;
-			Vlegit = 1;
-		      }
-		    }
-
-		    for(int d=0;d<33;d++){
-		      //eta
-		      if(time[d]!=0 && time[d] < 25*(s+1) && layeron[d]==1){
-			if(layersign[d]==0){
-			  if(dd>3){cout<<"e"<<dd<<"layer"<<d-16<<endl;}else{
-			    xofe.push_back(layerz[d]);
-			    dofe.push_back(d);
-			    if(abs(d-16)>8){
-			      la_sm = 2;
-			    }else{
-			      la_sm = 1;
-			    }
-			    platedr0 += dr0[d]*dr0[d];
-			    plateetadr0 += dr0[d]*dr0[d];
-			    platetmin += time[d];
-			    if(fabs(dr0[d])<drcut){
-			      fakeornot = 0;
-			    }
-			    if(fabs(dr0[d])<drcutin){
-			      platenXin += 1;
-			    }
-			    yofe.push_back(sqrt(x[d]*x[d]+y[d]*y[d]));//as r
-			    xyofe.push_back(layerz[d]*sqrt(x[d]*x[d]+y[d]*y[d]));
-			    //strip_phimemory += atan2(y[d],x[d]);
-			    strip_xmemory += x[d];
-			    strip_ymemory += y[d];
-			    strip_zmemory += z[d];
-			    //exofe.at(dd) = 5.;
-			    //eyofe.at(dd) = 0.435;
-			    dialphi = atan2(y[d],x[d]);
-			    dialphi = round(dialphi/pi*8.0)*pi/8.0;
-			    if(uvfit==0||Uon==0||Von==0||Ulegit==0||Vlegit==0){
-			      x3d.push_back(x[d]);
-			      y3d.push_back(y[d]);
-			      z3d.push_back(layerz[d]);
-			      d3d.push_back(d);
-			      lphi = atan2(y[d],x[d]);
-			      lphi = round(lphi/pi*8.0)*pi/8.0+pi/2.0;
-			      //cout<<"layer"<<d<<"\tlphi"<<(lphi-pi/2.0)/pi*8.0<<endl;
-			      l1ofe.at(dall) = cos(lphi);
-			      l2ofe.at(dall) = sin(lphi);
-			      l3ofe.at(dall) = 0;
-			      dall += 1;//for xuv/uv fit		  
-			    }
-			    dd += 1;//for eta
-			  }
-			}else{
-			  if((Ulegit!=0&&layersign[d]==1)||(Vlegit!=0&&layersign[d]==-1)){
-			    platedr0 += dr0[d]*dr0[d];
-			    platetmin += time[d];
-			    if(fabs(dr0[d])<drcutin){
-			      platenUVin += 1;
-			    }
-			    x3d.push_back(x[d]);
-			    y3d.push_back(y[d]);
-			    z3d.push_back(layerz[d]);
-			    d3d.push_back(d);
-			    dofs.push_back(d);//stereo
-			    phifraction = atan2(y[d],x[d]);
-			    if(la_sm==2){
-			      while( abs(phifraction) > pi/8.0 ){
-				if(phifraction>0){ phifraction -= pi/4.0;
-				}else{ phifraction += pi/4.0;}
-			      }
-			    }else{
-			      phifraction += pi/8.0;
-			      while( abs(phifraction) > pi/8.0 ){
-				if(phifraction>0){ phifraction -= pi/4.0;
-				}else{ phifraction += pi/4.0; }
-			      }
-			    }
-			    rofs.push_back(hypot(x[d],y[d])*(cos(phifraction)+layersign[d]*sin(strip_phifraction)*tan(1.5*pi/180)));//stereo//degpoint
-			    signofs.push_back(layersign[d]);
-			    lphi = atan2(y[d],x[d]);
-			    lphi = round(lphi/pi*8.0)*pi/8.0+pi/2.0+layersign[d]*1.5/180.0*pi;//degpoint
-			    l1ofe.at(dall) = cos(lphi);
-			    l2ofe.at(dall) = sin(lphi);
-			    l3ofe.at(dall) = 0;
-			    dstereo += 1;
-			    dall += 1;
-			  }
-			}
-		      }
-		    }
-		    if(dd!=l){alert[2]+=1;}
-		    if(((uvfit==2&&Ulegit!=0&&Vlegit!=0&&Uon!=0&&Von!=0)&&(dall!=k))||((uvfit==1&&Uon!=0&&Von!=0)&&(dall!=k))||((uvfit==0||Uon==0||Von==0)&&(dall!=l+k))){alert[3]+=1;}
-		    if(dd==l){
-		      plateetadr0 /= 1.0*l;
-		      platedr0 /= 1.0*(l+dstereo);
-		      platetmin /= 1.0*(l+dstereo);
-		      if(analytic==0){
-			if(robust==0){
-			  mint[n] = new TGraphErrors(l,&xofe[0],&yofe[0],&exofe[0],&eyofe[0]);
-			  linear->SetParameters(2*atan(exp(-(eta1+eta2)/2.0)),0);
-			  if(mueta>0){		      
-			    linear->SetParLimits(0,0.,pi/2.0);
-			  }else{
-			    linear->SetParLimits(0,pi/2.0,pi);
-			  }
-			  linear->FixParameter(1,0);
-			  mint[n]->Fit("lin","Q","",-8000,8000);
-			  if(fabs(linear->GetParameter(0)/pi*2.0-round(linear->GetParameter(0)/pi*2.0))<0.00001)alert[7]+=1;
-			  gtheta = linear->GetParameter(0);
-			  linear->ReleaseParameter(1);
-			  mint[n]->Fit("lin","Q","",-8000,8000);
-			  if(fabs(linear->GetParameter(0)/pi*2.0-round(linear->GetParameter(0)/pi*2.0))<0.00001)alert[7]+=1;
-			  ltheta = linear->GetParameter(0);
-			  if(l>2){platechi2_ndf = linear->GetChisquare()/1.0/(l-2);}else{platechi2_ndf = linear->GetChisquare()/0.1;}
-			  esdelta[l][k][s] += fabs(gtheta-ltheta);
-			  edelta[l][s] += fabs(gtheta-ltheta);
-			  zintercept = linear->GetParameter(1);
-			  rintercept = -zintercept*tan(ltheta);
-			}
-			if(robust==1){
-			  for(int mr=0;mr<l;mr++){
-			    xfit->ReleaseParameter(mr*2);
-			    xfit->ReleaseParameter(mr*2+1);
-			    xfit->SetParameter(mr*2,Form("x[%d]",mr),xofe.at(mr),1,-8000,8000);
-			    xfit->SetParameter(mr*2+1,Form("y[%d]",mr),yofe.at(mr),1,0,6000);
-			    xfit->FixParameter(mr*2);
-			    xfit->FixParameter(mr*2+1);
-			  }
-			  for(int mr=l;mr<4;mr++){
-			    xfit->ReleaseParameter(mr*2);
-			    xfit->ReleaseParameter(mr*2+1);
-			    xfit->SetParameter(mr*2,Form("z[%d]",mr),0,1,-8000,8000);
-			    xfit->SetParameter(mr*2+1,Form("r[%d]",mr),0,1,0,6000);
-			    xfit->FixParameter(mr*2);
-			    xfit->FixParameter(mr*2+1);
-			  }
-			  if(mueta>0){
-			    xfit->SetParameter(8,"a",tan(2*atan(exp(-(eta1+eta2)/2.0))),0.5,0.0,1.0);
-			  }else{
-			    xfit->SetParameter(8,"a",tan(2*atan(exp(-(eta1+eta2)/2.0))),0.5,-1.0,0.0);
-			  }
-			  xfit->SetParameter(9,"b",0,300,-2000,2000);
-			  xfit->FixParameter(9);
-			  xfit->ExecuteCommand("MIGRAD",0,0);
-			  if(fabs(atan(xfit->GetParameter(8))/pi*2.0-round(atan(xfit->GetParameter(8))/pi*2.0))<0.00001)alert[7]+=1;
-                          //gtheta = atan(xfit->GetParameter(8));
-
-			  xfit->ReleaseParameter(9);
-			  xfit->SetParameter(9,"b",0,300,-2000,2000);
-			  xfit->ExecuteCommand("MIGRAD",0,0);
-			  /*while(fabs(fabs(minuit->GetParameter(61))-pi)<0.00000001){
-			    piphi = minuit->GetParameter(61);
-			    cout<<piphi<<endl;
-			    minuit->SetParameter(61,"phi",-piphi*0.99,0.1,-pi,pi);
-			    minuit->ExecuteCommand("MIGRAD",0,0);
-			    //cout<<platephi0<<" : "<<minuit->GetParameter(61)<<endl;//for phi
-			    }
-			  minuit->ExecuteCommand("MIGRAD",0,0);
-			  while(fabs(fabs(minuit->GetParameter(61))-pi)<0.00000001){
-			    piphi = minuit->GetParameter(61);
-			    cout<<piphi<<endl;
-			    minuit->SetParameter(61,"phi",-piphi*0.99,0.1,-pi,pi);
-			    minuit->ExecuteCommand("MIGRAD",0,0);
-			    //cout<<platephi0<<" : "<<minuit->GetParameter(61)<<endl;//for phi*/                                         
-			  if(fabs(atan(xfit->GetParameter(8))/pi*2.0-round(atan(xfit->GetParameter(8))/pi*2.0))<0.00001)alert[7]+=1;
-                          ltheta = atan(xfit->GetParameter(8));
-                          //if(l>2){platechi2_ndf = xfit->GetChisquare()/1.0/(l-2);}else{platechi2_ndf = xfit->GetChisquare()/0.1;}
-                          esdelta[l][k][s] += fabs(gtheta-ltheta);
-                          edelta[l][s] += fabs(gtheta-ltheta);
-			  rintercept = xfit->GetParameter(9);
-                          zintercept = -rintercept/tan(ltheta);
-
-			  xfit->ReleaseParameter(8);
-			  xfit->ReleaseParameter(9);
-			  gtheta = atan(TMath::Mean(l,&xyofe[0])/(TMath::RMS(l,&xofe[0])*TMath::RMS(l,&xofe[0])*(l-1)/l+TMath::Mean(l,&xofe[0])*TMath::Mean(l,&xofe[0])));
-
-			}	   
-		      }else{
-			if(checkexp==1){
-			  for(int ppp=0;ppp<l;ppp++){
-			    cout<<xofe[ppp]<<"\t"<<yofe[ppp]<<endl;
-			  }
-			}
-			//cout<<TMath::RMS(l,&xofe[0])<<endl;
-			if(analytic==1){
-			  gtheta = atan(TMath::Mean(l,&xyofe[0])/(TMath::RMS(l,&xofe[0])*TMath::RMS(l,&xofe[0])*(l-1)/l+TMath::Mean(l,&xofe[0])*TMath::Mean(l,&xofe[0])));
-			  ltheta = atan((TMath::Mean(l,&xyofe[0])-TMath::Mean(l,&xofe[0])*TMath::Mean(l,&yofe[0]))/(TMath::RMS(l,&xofe[0])*TMath::RMS(l,&xofe[0])*(l-1)/l));
-			  if(checkexp==1){cout<<"gthetacheck"<<gtheta<<endl;
-			    cout<<"lthetacheck"<<ltheta<<endl;}
-			  if(l>2){
-			    platechi2_ndf = TMath::RMS(l,&yofe[0])*TMath::RMS(l,&yofe[0])*(l-1)/l-(TMath::Mean(l,&xyofe[0])-TMath::Mean(l,&xofe[0])*TMath::Mean(l,&yofe[0]))*(TMath::Mean(l,&xyofe[0])-TMath::Mean(l,&xofe[0])*TMath::Mean(l,&yofe[0]))/TMath::RMS(l,&xofe[0])/TMath::RMS(l,&xofe[0])/(l-1)*l/(l-2);
-			  }else{
-			    platechi2_ndf = TMath::RMS(l,&yofe[0])*TMath::RMS(l,&yofe[0])*(l-1)/l-(TMath::Mean(l,&xyofe[0])-TMath::Mean(l,&xofe[0])*TMath::Mean(l,&yofe[0]))*(TMath::Mean(l,&xyofe[0])-TMath::Mean(l,&xofe[0])*TMath::Mean(l,&yofe[0]))/TMath::RMS(l,&xofe[0])/TMath::RMS(l,&xofe[0])/(l-1)*l/0.1;
-			  }
-			  esdelta[l][k][s] += fabs(gtheta-ltheta);
-			  edelta[l][s] += fabs(gtheta-ltheta);
-			  rintercept = TMath::Mean(l,&yofe[0])-TMath::Mean(l,&xofe[0])*tan(ltheta);
-			  zintercept = -rintercept/tan(ltheta);
-			}
-			if(analytic==2){
-			  mint[n] = new TGraphErrors(l,&xofe[0],&yofe[0],&exofe[0],&eyofe[0]);
-			  linearl->SetParameters(tan(2*atan(exp(-(eta1+eta2)/2.0))),0);
-			  if(mueta>0){
-			    linearl->SetParLimits(0,0.,1000.);
-			  }else{
-			    linearl->SetParLimits(0,-1000.,0.);
-			  }
-			  linearl->FixParameter(1,0);
-			  mint[n]->Fit("linl","QC","",-8000,8000);
-			  //if(fabs(linearl->GetParameter(0)/pi*2.0-round(linearl->GetParameter(0)/pi*2.0))<0.00001)alert[7]+=1;
-			  gtheta = atan(linearl->GetParameter(0));
-			  linearl->ReleaseParameter(1);
-			  mint[n]->Fit("linl","QC","",-8000,8000);
-			  //if(fabs(linearl->GetParameter(0)/pi*2.0-round(linearl->GetParameter(0)/pi*2.0))<0.00001)alert[7]+=1;
-			  ltheta = atan(linearl->GetParameter(0));
-			  if(l>2){platechi2_ndf = linearl->GetChisquare()/1.0/(l-2);}else{platechi2_ndf = linearl->GetChisquare()/0.1;}
-			  esdelta[l][k][s] += fabs(gtheta-ltheta);
-			  edelta[l][s] += fabs(gtheta-ltheta);
-			  zintercept = linearl->GetParameter(1);
-			  rintercept = -zintercept*tan(ltheta);
-			}
-		      }
-
-		      plateresid2dl.erase(plateresid2dl.begin(),plateresid2dl.end());
-		      plateresid2dg.erase(plateresid2dg.begin(),plateresid2dg.end());
-		      for(int mr=0;mr<dd;mr++){
-			resid = yofe.at(mr)-tan(ltheta)*xofe.at(mr)+tan(ltheta)*zintercept;
-			residhist[4]->Fill(/*xofe.at(mr),*/resid);
-			plateresid2dl.push_back(resid);
-			resid = yofe.at(mr)-tan(gtheta)*xofe.at(mr);
-			residhist[5]->Fill(/*xofe.at(mr),*/resid);
-			plateresid2dg.push_back(resid);
-		      }
-		      if(uvfit==0||Uon==0||Von==0||Ulegit==0||Vlegit==0){
-			for(int pp=0;pp<dofs.size();pp++){
-			  rhat = tan(ltheta)*layerz[dofs.at(pp)]-tan(ltheta)*zintercept;
-			  resid = rofs.at(pp)-rhat;
-			  estimated_phifraction += signofs.at(pp)*atan(resid/rhat/tan(1.5/180*pi));
-			}
-			if(dofs.size()!=0)estimated_phifraction /= dofs.size();
-		      }else{
-			rplus = 0;
-			rminus = 0;
-			dplus = 0; dminus = 0;
-			for(int pp=0;pp<dofs.size();pp++){
-			  if(signofs.at(pp)==1){
-			    dplus += 1;
-			    rplus += rofs.at(pp); 
-			  }
-			  if(signofs.at(pp)==-1){
-                            dminus += 1;
-                            rminus += rofs.at(pp);
-                          }
-			}
-			rplus /= 1.0*dplus;
-			rminus /= 1.0*dminus;
-			rhat = (rplus+rminus)/2.0;
-			resid = rplus-rhat;
-			estimated_phifraction = atan(resid/rhat/tan(1.5/180*pi));
-		      }
-
-		      if(platesnf!=dofs.size())alert[5] += 1;
-		      strip_xmemory /= l;
-		      strip_ymemory /= l;
-		      strip_zmemory /= l;
-		      strip_phimemory = atan2(strip_ymemory,strip_xmemory);
-
-		    }
-		    
-		    if(checkexp==1)cout<<"minuit"<<endl;//check6
-		    plateXpat = SectorXpat(dofe.size(),&dofe[0]);
-		    platePhipat = SectorAllpat(d3d.size(),&d3d[0]);
-		    platePhiXpat = SectorXpat(d3d.size(),&d3d[0]);
-		    plateUVpat = SectorUVpat(d3d.size(),&d3d[0]);
-		    cout<<plateXpat<<"\t"<<plateUVpat<<"\t"<<platePhipat<<"\t"<<platePhiXpat<<endl;
-		    
-		    for(int mr=0;mr<dall;mr++){
-		      minuit->ReleaseParameter(mr*6);
-		      minuit->ReleaseParameter(mr*6+1);
-		      minuit->ReleaseParameter(mr*6+2);
-		      minuit->ReleaseParameter(mr*6+3);
-		      minuit->ReleaseParameter(mr*6+4);
-		      minuit->ReleaseParameter(mr*6+5);
-		      minuit->SetParameter(mr*6,Form("x[%d]",mr),x3d.at(mr),1,-4500,4500);
-		      minuit->SetParameter(mr*6+1,Form("y[%d]",mr),y3d.at(mr),1,-4500,4500);
-		      minuit->SetParameter(mr*6+2,Form("z[%d]",mr),z3d.at(mr),1,-8000,8000);
-		      minuit->SetParameter(mr*6+3,Form("l1[%d]",mr),l1ofe.at(mr),1,-100.,100.);
-		      minuit->SetParameter(mr*6+4,Form("l2[%d]",mr),l2ofe.at(mr),1,-100.,100.);
-		      minuit->SetParameter(mr*6+5,Form("l3[%d]",mr),l3ofe.at(mr),1,-100.,100.);
-		      minuit->FixParameter(mr*6);
-		      minuit->FixParameter(mr*6+1);
-		      minuit->FixParameter(mr*6+2);
-		      minuit->FixParameter(mr*6+3);
-		      minuit->FixParameter(mr*6+4);
-		      minuit->FixParameter(mr*6+5);
-		    }
-		    
-		    for(int mr=dall;mr<10;mr++){
-		      minuit->ReleaseParameter(mr*6);
-		      minuit->ReleaseParameter(mr*6+1);
-		      minuit->ReleaseParameter(mr*6+2);
-		      minuit->ReleaseParameter(mr*6+3);
-		      minuit->ReleaseParameter(mr*6+4);
-		      minuit->ReleaseParameter(mr*6+5);
-		      minuit->SetParameter(mr*6,Form("x[%d]",mr),0,1,-4500,4500);
-		      minuit->SetParameter(mr*6+1,Form("y[%d]",mr),0,1,-4500,4500);
-		      minuit->SetParameter(mr*6+2,Form("z[%d]",mr),0,1,-8000,8000);
-		      minuit->SetParameter(mr*6+3,Form("l1[%d]",mr),l1ofe.at(mr),1,-100.,100.);
-		      minuit->SetParameter(mr*6+4,Form("l2[%d]",mr),l2ofe.at(mr),1,-100.,100.);
-		      minuit->SetParameter(mr*6+5,Form("l3[%d]",mr),l3ofe.at(mr),1,-100.,100.);
-		      minuit->FixParameter(mr*6);
-		      minuit->FixParameter(mr*6+1);
-		      minuit->FixParameter(mr*6+2);
-		      minuit->FixParameter(mr*6+3);
-		      minuit->FixParameter(mr*6+4);
-		      minuit->FixParameter(mr*6+5);
-		    }
-		    minuit->SetParameter(62,"a",0,300,-2000,2000);
-		    minuit->SetParameter(63,"b",0,300,-2000,2000);
-		    minuit->FixParameter(62);
-		    minuit->FixParameter(63);
-
-		    if(l3d==1){
-		      minuit->SetParameter(64,"c",zintercept,300,-2000,2000);
-		      if(z3d.at(0)>0){
-			if(uvfit==0||Uon==0||Von==0||Ulegit==0||Vlegit==0){
-			  minuit->SetParameter(60,"theta",atan(tan(ltheta)/cos(estimated_phifraction)),0.1,0.,pi/2.0);
-			}else{
-			  minuit->SetParameter(60,"theta",atan(signfunc(mueta)*rhat/(layerz[la_sm*8+9]+layerz[la_sm*8+16])*2.0)/cos(estimated_phifraction),0.1,0.,pi/2.0);
-			}
-		      }else{
-			if(uvfit==0||Uon==0||Von==0||Ulegit==0||Vlegit==0){
-			  minuit->SetParameter(60,"theta",atan(tan(ltheta)/cos(estimated_phifraction)),0.1,pi/2.0,pi);
-			}else{
-			  minuit->SetParameter(60,"theta",atan(signfunc(mueta)*rhat/(layerz[la_sm*8+9]+layerz[la_sm*8+16])*2.0)/cos(estimated_phifraction),0.1,pi/2.0,pi);
-			}
-		      }
-		      minuit->SetParameter(61,"phi",dialphi+estimated_phifraction,0.1,-pi,pi);
-		      //cout<<platephi0<<" : "<<dialphi+estimated_phifraction<<endl;//for phi
-		      minuit->FixParameter(60);
-		      minuit->FixParameter(61);
-		      minuit->ExecuteCommand("MIGRAD",0,0);
-		      minuit->ReleaseParameter(60);
-		      minuit->ReleaseParameter(61);
-		      minuit->ExecuteCommand("MIGRAD",0,0);
-		      //cout<<platephi0<<" : "<<minuit->GetParameter(61)<<endl;//for phi    
-		      while(fabs(fabs(minuit->GetParameter(61))-pi)<0.00000001){
-			piphi = minuit->GetParameter(61);
-			cout<<piphi<<endl;
-			minuit->SetParameter(61,"phi",-piphi*0.99,0.1,-pi,pi);
-			minuit->ExecuteCommand("MIGRAD",0,0);
-			//cout<<platephi0<<" : "<<minuit->GetParameter(61)<<endl;//for phi  
-		      }
-		      minuit->ExecuteCommand("MIGRAD",0,0);
-		      while(fabs(fabs(minuit->GetParameter(61))-pi)<0.00000001){
-			piphi = minuit->GetParameter(61);
-			cout<<piphi<<endl;
-			minuit->SetParameter(61,"phi",-piphi*0.99,0.1,-pi,pi);
-			minuit->ExecuteCommand("MIGRAD",0,0);
-			//cout<<platephi0<<" : "<<minuit->GetParameter(61)<<endl;//for phi      
-		      }
-		      minuit->ExecuteCommand("MIGRAD",0,0);
-		      while(fabs(fabs(minuit->GetParameter(61))-pi)<0.00000001){
-			piphi = minuit->GetParameter(61);
-			cout<<piphi<<endl;
-			minuit->SetParameter(61,"phi",-piphi*0.99,0.1,-pi,pi);
-			minuit->ExecuteCommand("MIGRAD",0,0);
-			//cout<<platephi0<<" : "<<minuit->GetParameter(61)<<endl;//for phi \
-			
-		      }
-		      
-		      
-		      ltheta3d = minuit->GetParameter(60);
-		      lphi3d = minuit->GetParameter(61);
-		      //cout<<platephi0<<" : "<<lphi3d<<endl;//for phi    
-		      zintercept3d = minuit->GetParameter(64);
-		      aofz0 = intersecX(0,0,zintercept3d,gtheta3d,gphi3d,0);
-		      bofz0 = intersecY(0,0,zintercept3d,gtheta3d,gphi3d,0);
-		    }
-
-		    minuit->SetParameter(64,"c",0,300,-2000,2000);
-		    minuit->FixParameter(64);
-		    if(z3d.at(0)>0){
-		      if(uvfit==0||Uon==0||Von==0||Ulegit==0||Vlegit==0){
-			minuit->SetParameter(60,"theta",atan(tan(gtheta)/cos(estimated_phifraction)),0.1,0.,pi/2.0);
-		      }else{
-			minuit->SetParameter(60,"theta",atan(signfunc(mueta)*rhat/(layerz[la_sm*8+9]+layerz[la_sm*8+16])*2.0)/cos(estimated_phifraction),0.1,0.,pi/2.0);
-		      }
-		    }else{
-		      if(uvfit==0||Uon==0||Von==0||Ulegit==0||Vlegit==0){
-			minuit->SetParameter(60,"theta",atan(tan(gtheta)/cos(estimated_phifraction)),0.1,pi/2.0,pi);
-		      }else{
-			minuit->SetParameter(60,"theta",atan(signfunc(mueta)*rhat/(layerz[la_sm*8+9]+layerz[la_sm*8+16])*2.0)/cos(estimated_phifraction),0.1,pi/2.0,pi);
-		      }
-		    }
-		    minuit->SetParameter(61,"phi",dialphi+estimated_phifraction,0.1,-pi,pi);
-		    //cout<<platephi0<<" : "<<dialphi+estimated_phifraction<<endl;//for phi
-   
-		    minuit->ExecuteCommand("MIGRAD",0,0);
-		    while(fabs(fabs(minuit->GetParameter(61))-pi)<0.00000001){
-                      piphi = minuit->GetParameter(61);
-                      cout<<piphi<<endl;
-                      minuit->SetParameter(61,"phi",-piphi*0.99,0.1,-pi,pi);
-                      minuit->ExecuteCommand("MIGRAD",0,0);
-                      //cout<<platephi0<<" : "<<minuit->GetParameter(61)<<endl;//for phi                         
-		    }
-                    minuit->ExecuteCommand("MIGRAD",0,0);
-		    while(fabs(fabs(minuit->GetParameter(61))-pi)<0.00000001){
-                      piphi = minuit->GetParameter(61);
-                      cout<<piphi<<endl;
-                      minuit->SetParameter(61,"phi",-piphi*0.99,0.1,-pi,pi);
-                      minuit->ExecuteCommand("MIGRAD",0,0);
-                      //cout<<platephi0<<" : "<<minuit->GetParameter(61)<<endl;//for phi 		      			   
-		    }
-		    minuit->ExecuteCommand("MIGRAD",0,0);
-		    while(fabs(fabs(minuit->GetParameter(61))-pi)<0.00000001){
-                      piphi = minuit->GetParameter(61);
-                      cout<<piphi<<endl;
-                      minuit->SetParameter(61,"phi",-piphi*0.99,0.1,-pi,pi);
-                      minuit->ExecuteCommand("MIGRAD",0,0);
-                      //cout<<platephi0<<" : "<<minuit->GetParameter(61)<<endl;//for phi     \
-                                                                                              
-                    }
-		    minuit->ExecuteCommand("MIGRAD",0,0);
-		    while(fabs(fabs(minuit->GetParameter(61))-pi)<0.00000001){
-                      piphi = minuit->GetParameter(61);
-                      cout<<piphi<<endl;
-                      minuit->SetParameter(61,"phi",-piphi*0.99,0.1,-pi,pi);
-                      minuit->ExecuteCommand("MIGRAD",0,0);
-                      //cout<<platephi0<<" : "<<minuit->GetParameter(61)<<endl;//for phi     \
-                                                                                              
-                    }
-		    minuit->ReleaseParameter(62);
-		    minuit->ReleaseParameter(63);                  
-		    minuit->ReleaseParameter(64);
-		    
-		    gtheta3d = minuit->GetParameter(60);
-		    gphi3d = minuit->GetParameter(61);
-		    if(firsttime==0){//start of hit
-		      if(checkexp==1)cout<<"hitstart"<<endl;//check4
-		      firsttime = 1;
-		      //data->GetEntry(n);		    
-		      //initialize
-		      hit_phimemory = 0;
-		      hit_thetamemory = 0;
-		      hit_xmemory = 0;
-		      hit_ymemory = 0;
-		      hit_zmemory = 0;
-		      hit_dphi = 0;
-		    
-		      for(int d=0;d<33;d++){
-			mur[d] = 0;
-			mut[d] = 0;
-		      }
-				      		      
-		      //initialize                                                
-		      int ddd = 0;
-		      
-		      hitxofe.erase(hitxofe.begin(),hitxofe.end());
-		      hityofe.erase(hityofe.begin(),hityofe.end());
-		      hitxyofe.erase(hitxyofe.begin(),hitxyofe.end());
-		      hit3dxofe.erase(hit3dxofe.begin(),hit3dxofe.end());
-		      hit3dyofe.erase(hit3dyofe.begin(),hit3dyofe.end());
-		      hit3dzofe.erase(hit3dzofe.begin(),hit3dzofe.end());
-		      
-		      //for hitpoints
-		      for(int d=0;d<33;d++){
-
-			if(signfunc(d-16)==signfunc(mueta)&&(abs(d-16)>8)+1==la_sm){
-			  if(hitt0[d]==0)alert[6]+=1;
-			  phifraction = atan2(hity0[d],hitx0[d]);
-			  if(la_sm==2){	
-			    while( fabs(phifraction) > pi/8.0 ){
-			      if(phifraction>0){ phifraction -= pi/4.0;
-			      }else{ phifraction += pi/4.0; }
-			    }
-			  }else{
-			    phifraction += pi/8.0;
-			    while( fabs(phifraction) > pi/8.0 ){
-			      if(phifraction>0){ phifraction -= pi/4.0;
-			      }else{ phifraction += pi/4.0; }
-			    }
-			  }
-			  if(layersign[d]==0){
-			    /*in 2D, comparison for Xstrip is only needed, so do not reckon 1.5deg*/
-			    hitxofe.push_back(hitz0[d]);
-			    hityofe.push_back(hypot(hitx0[d],hity0[d])*cos(phifraction));
-			    hitxyofe.push_back(hitz0[d]*hypot(hitx0[d],hity0[d])*cos(phifraction));
-			  }
-			  hit_xmemory += hitx0[d];
-			  hit_ymemory += hity0[d];
-			  hit_zmemory += hitz0[d];
-			  mur[d] = hypot(hitx0[d],hity0[d])*(cos(phifraction)+layersign[d]*sin(phifraction)*tan(1.5*pi/180));
-			  mut[d] = hitt0[d];
-
-			  hit3dxofe.push_back(hitx0[d]);
-			  hit3dyofe.push_back(hity0[d]);
-			  hit3dzofe.push_back(hitz0[d]);
-			  ddd += 1;
-			} 
-			
-		      }
-
-		      if(hitxofe.size()!=4)alert[6]+=1;
-		      if(ddd!=8)alert[6]+=1;
-		      if(ddd!=0){
-                        hit_xmemory /= ddd;
-                        hit_ymemory /= ddd;
-                        hit_zmemory /= ddd;
-                        hit_phimemory = atan2(hit_ymemory,hit_xmemory);
-                        hit_thetamemory = atan2(hypot(hit_xmemory,hit_ymemory),hit_zmemory);
-                      }		      
-
-		      //for 2dtrack
-		      if(hitxofe.size()>1){
-			if(analytic==0){
-			  hit[n] = new TGraphErrors(hitxofe.size(),&hitxofe[0],&hityofe[0],&hitexofe[0],&hiteyofe[0]);
-			  linear->SetParameters(2*atan(exp(-(eta1+eta2)/2.0)),0);
-			  linear->SetParLimits(0,0.,pi);
-			  linear->FixParameter(1,0);
-			  hit[n]->Fit("lin","Q","",-8000,8000);
-			  hit_gtheta = linear->GetParameter(0);
-			  linear->ReleaseParameter(1);
-			  hit[n]->Fit("lin","Q","",-8000,8000);
-			  hit_ltheta = linear->GetParameter(0);
-			  hit_zintercept = linear->GetParameter(1);
-			  hit_rintercept = -hit_zintercept*tan(hit_ltheta);
-			  if(Xtruth==1){
-                            if(la_sm==1)hit_gtheta = atan(tan(hit_ltheta)+hit_rintercept/(layerz[20]+layerz[21])*2.0);
-                            if(la_sm==2)hit_gtheta = atan(tan(hit_ltheta)+hit_rintercept/(layerz[28]+layerz[29])*2.0);
-                          }
-			  intercepthist[1]->Fill(hit_zintercept,hit_ltheta-hit_gtheta);
-			  intercepthist[3]->Fill(hit_ltheta-hit_gtheta,ltheta-gtheta);
-			}else{
-			  hit_gtheta = atan(TMath::Mean(4,&hitxyofe[0])/(TMath::RMS(4,&hitxofe[0])*TMath::RMS(4,&hitxofe[0])*(4-1)/4+TMath::Mean(4,&hitxofe[0])*TMath::Mean(4,&hitxofe[0])));
-			  hit_ltheta = atan((TMath::Mean(4,&hitxyofe[0])-TMath::Mean(4,&hitxofe[0])*TMath::Mean(4,&hityofe[0]))/(TMath::RMS(4,&hitxofe[0])*TMath::RMS(4,&hitxofe[0])*(4-1)/4));
-			  if(checkexp==1){cout<<"hit_gthetacheck"<<hit_gtheta<<endl;
-			    cout<<"hit_lthetacheck"<<hit_ltheta<<endl;}
-			  
-			  //platechi2_ndf = TMath::RMS(4,&hityofe[0])*TMath::RMS(4,&hityofe[0])*(4-1)/4-(TMath::Mean(4,&hitxyofe[0])-TMath::Mean(4,&hitxofe[0])*TMath::Mean(4,&hityofe[0]))*(TMath::Mean(4,&hitxyofe[0])-TMath::Mean(4,&hitxofe[0])*TMath::Mean(4,&hityofe[0]))/TMath::RMS(4,&hitxofe[0])/TMath::RMS(4,&hitxofe[0])/(4-1)*4/(4-2);
-			  
-			  hit_rintercept = TMath::Mean(4,&hityofe[0])-TMath::Mean(4,&hitxofe[0])*tan(hit_ltheta);
-			  hit_zintercept = -hit_rintercept/tan(hit_ltheta);
-			  if(Xtruth==1){
-                            if(la_sm==1)hit_gtheta = atan(tan(hit_ltheta)+hit_rintercept/(layerz[20]+layerz[21])*2.0);
-                            if(la_sm==2)hit_gtheta = atan(tan(hit_ltheta)+hit_rintercept/(layerz[28]+layerz[29])*2.0);
-                          }
-			  intercepthist[1]->Fill(hit_zintercept,hit_ltheta-hit_gtheta);
-			  intercepthist[3]->Fill(hit_ltheta-hit_gtheta,ltheta-gtheta);
-			}
-			//for 3dtrack
-			for(int mr=0;mr<ddd;mr++){
-			  track->ReleaseParameter(mr*3);
-			  track->ReleaseParameter(mr*3+1);
-			  track->ReleaseParameter(mr*3+2);
-			  track->SetParameter(mr*3,Form("x[%d]",mr),hit3dxofe.at(mr),1,-4500,4500);
-			  track->SetParameter(mr*3+1,Form("y[%d]",mr),hit3dyofe.at(mr),1,-4500,4500);
-			  track->SetParameter(mr*3+2,Form("z[%d]",mr),hit3dzofe.at(mr),1,-8000,8000);
-			  track->FixParameter(mr*3);
-			  track->FixParameter(mr*3+1);
-			  track->FixParameter(mr*3+2);
-			}
-			for(int mr=ddd;mr<10;mr++){
-			  track->ReleaseParameter(mr*3);
-			  track->ReleaseParameter(mr*3+1);
-			  track->ReleaseParameter(mr*3+2);
-			  track->SetParameter(mr*3,Form("x[%d]",mr),0,1,-4500,4500);
-			  track->SetParameter(mr*3+1,Form("y[%d]",mr),0,1,-4500,4500);
-			  track->SetParameter(mr*3+2,Form("z[%d]",mr),0,1,-8000,8000);
-			  track->FixParameter(mr*3);
-			  track->FixParameter(mr*3+1);
-			  track->FixParameter(mr*3+2);
-			}
-			
-			track->SetParameter(32,"a",truth_aofz0,100,-2000,2000);
-			track->SetParameter(33,"b",truth_bofz0,100,-2000,2000);
-			if(hit3dzofe.at(0)>0){track->SetParameter(30,"theta",platetheta0,0.1,0.,pi/2.0);}else{
-			  track->SetParameter(30,"theta",platetheta0,0.1,pi/2.0,pi);}
-			track->SetParameter(31,"phi",platephi0,0.1,-pi,pi);
-			track->FixParameter(30);
-			track->FixParameter(31);
-			track->ExecuteCommand("MIGRAD",0,0);
-			track->ReleaseParameter(30);
-			track->ReleaseParameter(31);
-			track->ExecuteCommand("MIGRAD",0,0);
-			track->ExecuteCommand("MIGRAD",0,0);
-			track->ExecuteCommand("MIGRAD",0,0);
-			track->ExecuteCommand("MIGRAD",0,0);
-			
-			hit_aofz0 = track->GetParameter(32);
-			hit_bofz0 = track->GetParameter(33);
-			hit_3dtheta = track->GetParameter(30);
-			hit_3dphi = track->GetParameter(31);
-			//cout<<platephi0<<" : "<<dialphi+estimated_phifraction<<" : "<<hit_3dphi<<endl;//for phi   
-			intercepthist[0]->Fill(hit_aofz0-truth_aofz0,hit_bofz0-truth_bofz0);
-			/*cout<<"hit_aofz0"<<hit_aofz0<<endl;
-			  cout<<"hit_bofz0"<<hit_bofz0<<endl;
-			  cout<<hit_3dtheta<<"\t"<<hit_ltheta<<endl;
-			  cout<<hit_3dphi<<"\t"<<phimemory<<endl;*/
-			
-			//for 2dtrack resid
-			for(int mr=0;mr<hitxofe.size();mr++){
-			  resid = hityofe.at(mr)-tan(hit_ltheta)*hitxofe.at(mr)+tan(hit_ltheta)*hit_zintercept;
-			  residhist[0]->Fill(/*hitxofe.at(mr),*/resid);
-			  resid = hityofe.at(mr)-tan(hit_gtheta)*hitxofe.at(mr);
-			  residhist[1]->Fill(/*hitxofe.at(mr),*/resid);
-			}
-			
-			//for 3dtrack resid(distance)
-			for(int mr=0;mr<ddd;mr++){
-			  resid = sqrt(distance1(hit_aofz0, hit_bofz0, 0, sin(hit_3dtheta)*cos(hit_3dphi), sin(hit_3dtheta)*sin(hit_3dphi), cos(hit_3dtheta), hit3dxofe.at(mr), hit3dyofe.at(mr), hit3dzofe.at(mr)));	  
-			  residhist[2]->Fill(resid);
-			}
-			
-			resid = sqrt(distance1(hit_aofz0, hit_bofz0, 0, sin(hit_3dtheta)*cos(hit_3dphi), sin(hit_3dtheta)*sin(hit_3dphi), cos(hit_3dtheta), x0, y0, z0));
-			
-			residhist[3]->Fill(resid);
-			
-		      }
-		    }//last of hit
-		    if(checkexp==1){
-		      cout<<platendata<<"th DATA Entry"<<platei-ninc[platendata]<<endl;//datacheck
-		      cout<<"mueta"<<plateeta0<<" : "<<eta0<<endl;
-		    }
-		    if(hit3dxofe.size()!=0){
-		      hit_gz = TMath::Mean(z3d.size(),&z3d[0]);
-		      if(UVtruth==1){
-			if(la_sm==1)hit_gz = (layerz[20]+layerz[21])/2.0;
-			if(la_sm==2)hit_gz = (layerz[28]+layerz[29])/2.0;
-		      }
-		      hit_gx = interseclX(hit3dxofe.at(0),hit3dyofe.at(0),hit3dzofe.at(0),hit3dxofe.at(hit3dxofe.size()-1),hit3dyofe.at(hit3dyofe.size()-1),hit3dzofe.at(hit3dzofe.size()-1),hit_gz);
-		      hit_gy = interseclY(hit3dxofe.at(0),hit3dyofe.at(0),hit3dzofe.at(0),hit3dxofe.at(hit3dxofe.size()-1),hit3dyofe.at(hit3dyofe.size()-1),hit3dzofe.at(hit3dzofe.size()-1),hit_gz);
-		      hit_gphi3d = atan2(hit_gy,hit_gx);
-		      hit_gtheta3d = atan2(hypot(hit_gx,hit_gy),hit_gz);
-		    }else{
-		      hit_gphi3d = 0;hit_gtheta3d=0;alert[8]+=1;
-		      cout<<"SIZE0error "<<platendata<<"th DATA Entry"<<platei-ninc[platendata]<<endl;
-		      cout<<"mueta"<<plateeta0<<" : "<<eta0<<endl;
-		    }
-		    
-		    cout<<platei<<endl;
-                    intercepthist[3]->Fill(aofz0-hit_aofz0,bofz0-hit_bofz0);
-                    cout<<"aofz0-hit_aofz0"<<fabs(aofz0-hit_aofz0)<<endl;
-                    cout<<"bofz0-hit_bofz0"<<fabs(bofz0-hit_bofz0)<<endl;
-                    cout<<fabs(gtheta3d-hit_gtheta3d)<<endl;
-                    cout<<fabs(gphi3d-hit_gphi3d)<<endl;		  
-		    cout<<"lthetacheck"<<fabs(ltheta-hit_ltheta)<<endl;
-                    cout<<"gthetacheck"<<fabs(gtheta-hit_gtheta)<<endl;
-		    delta[0] += ltheta - hit_ltheta;
-		    //cout<<"hit_gtheta-eta"<<hit_gtheta-atan(tan(2*atan(exp(-eta)))*cos(phi))<<endl;
-		    
-		    delta[1] += gtheta - hit_gtheta;
-		    nn += 1;
-		    esdelta[l][k][s] += fabs(gtheta-ltheta);
-		    hit_esdelta[l][k][s] += fabs(hit_gtheta-hit_ltheta);
-		    sigma_sltheta[l][k][s] += (ltheta-hit_ltheta)*(ltheta-hit_ltheta);
-		    sigma_sgtheta[l][k][s] += (gtheta-hit_gtheta)*(gtheta-hit_gtheta);
-		    edelta[l][s] += fabs(gtheta-ltheta);
-		    hit_edelta[l][s] += fabs(hit_gtheta-hit_ltheta);
-		    sigma_ltheta[l][s] += (ltheta-hit_ltheta)*(ltheta-hit_ltheta);
-		    sigma_gtheta[l][s] += (gtheta-hit_gtheta)*(gtheta-hit_gtheta);
-		    
-		    //for dr2d dt2d
-		    dr2d = 0;
-		    dt2d = 0;
-		    
-		    for(int mr=0;mr<dd;mr++){
-		      for(int d=0;d<33;d++){
-			if(fabs(xofe.at(mr)-layerz[d])<zwidth){
-			  dr2d += (yofe.at(mr)-tan(hit_ltheta)*(layerz[d]-hit_zintercept))*(yofe.at(mr)-tan(hit_ltheta)*(layerz[d]-hit_zintercept));
-			  dt2d += (time[d]-mut[d])*(time[d]-mut[d]);
-			  if(d==16)alert[1]+=1;
-			}
-		      }
-		    }
-		    if(dd!=0){
-		      dr2d = sqrt(dr2d/dd);
-		      dt2d = sqrt(dt2d/dd); 
-		    }
-		    
-		    
-		    //d3->Fill();
-		    on = 1;
-		    f = f+1;
-		    //cout<<platephi0<<" : "<<dialphi+estimated_phifraction<<" : "<<hit_3dphi<<endl;//for phi
-		    vec_dr2d.push_back(dr2d);
-		    vec_zintercept.push_back(zintercept);
-		    vec_rintercept.push_back(rintercept);
-		    vec_hit_zintercept.push_back(hit_zintercept);
-		    vec_hit_rintercept.push_back(hit_rintercept);
-		    vec_ltheta.push_back(ltheta);
-		    vec_gtheta.push_back(gtheta);
-		    vec_hit_ltheta.push_back(hit_ltheta);
-		    vec_hit_gtheta.push_back(hit_gtheta);
-		    vec_ltheta3d.push_back(ltheta3d);
-		    vec_lphi3d.push_back(lphi3d);
-		    vec_hit_3dtheta.push_back(hit_3dtheta);
-		    vec_hit_3dphi.push_back(hit_3dphi);
-		    vec_gtheta3d.push_back(gtheta3d);
-		    vec_gphi3d.push_back(gphi3d);
-		    vec_hit_gtheta3d.push_back(hit_gtheta3d);
-		    vec_hit_gphi3d.push_back(hit_gphi3d);
-		    vec_zintercept3d.push_back(zintercept3d);
-		    vec_hit_phimemory.push_back(hit_phimemory);
-		    vec_hit_thetamemory.push_back(hit_thetamemory);
-		    vec_strip_phimemory.push_back(strip_phimemory);
-		    vec_timewindow.push_back(platetimewindow);
-		    vec_nlayer.push_back(platenf);
-		    vec_nUV.push_back(platesnf);
-		    vec_nX.push_back(plateneta);
-		    vec_nUVin.push_back(platenUVin);
-                    vec_nXin.push_back(platenXin);
-		    vec_Xpat.push_back(plateXpat);
-		    vec_UVpat.push_back(plateUVpat);
-		    vec_Phipat.push_back(platePhipat);
-		    vec_PhiXpat.push_back(platePhiXpat);
-		    vec_Uvalid.push_back(Uvalid);
-		    vec_Vvalid.push_back(Vvalid);
-		    vec_estimated_phifraction.push_back(estimated_phifraction);
-		    vec_sector.push_back(platesector);
-		    vec_sectoron.push_back(platesectoron);
-		    vec_chi2_ndf.push_back(platechi2_ndf);
-		    vec_dr0.push_back(platedr0);
-		    vec_etadr0.push_back(plateetadr0);
-		    vec_tmin.push_back(platetmin);
-		    vec_fakeornot.push_back(fakeornot);
-		    
+	
+		prelayerd.erase(prelayerd.begin(),prelayerd.end());
+		prelayerslope.erase(prelayerslope.begin(),prelayerslope.end());
+		Uvalid = 0;
+		Vvalid = 0;
+		grade = 0;
+		Xuse = 0;
+		URZmemory = 0;
+		VRZmemory = 0;
+		for(int d=0;d<33;d++){
+		  if(time[d]!=0 && time[d] < 25*(s+1) && layeron[d]==1){
+		    //cout<<d<<endl;
+		    strip_phifraction = Dphi(abs(d-16)>8,atan2(y[d],x[d]));
+		    prelayerslope.push_back(hypot(x[d],y[d])*(cos(strip_phifraction)+layersign[d]*sin(strip_phifraction)*tan(1.5*pi/180))/layerz[d]);
+		    prelayerd.push_back(d-16);
 		  }
 		}
-	      }
-	    }
-	  }
-	}
-      }//last of s
+		for(int d=0;d<8;d++){
+		  layerbit[d] = 0;
+		  phicoeff[d] = 0;
+		}	
+		UVfit(prelayerd.size(),&prelayerd[0],&prelayerslope[0],&Uvalid,&Vvalid,layerbit,phicoeff,slopewidth,uvfit,&grade,&Xuse);
+		cout<<"Grade"<<grade<<endl;
+		cout<<Uvalid<<Vvalid<<endl;
+		cout<<layerbit[0]<<layerbit[1]<<layerbit[2]<<layerbit[3]<<layerbit[4]<<layerbit[5]<<layerbit[6]<<layerbit[7]<<endl;
+		for(int d=0;d<33;d++){
+		  //eta
+		  if(time[d]!=0 && time[d] < 25*(s+1) && layeron[d]==1){
+		    vecvec_dr0.at(vecvec_dr0.size()-1).push_back(dr0[d]);
+		    vecvec_layer.at(vecvec_layer.size()-1).push_back(d-16);
+		    if(layersign[d]==0){
+		      if(dd>3){cout<<"e"<<dd<<"layer"<<d-16<<endl;}else{
+			xofe.push_back(layerz[d]);
+			dofe.push_back(d);
+			vecvec_Xdr0.at(vecvec_Xdr0.size()-1).push_back(dr0[d]);
+			vecvec_Xlayer.at(vecvec_Xlayer.size()-1).push_back(d-16);
+			if(abs(d-16)>8){
+			  la_sm = 2;
+			}else{
+			  la_sm = 1;
+			}
+			platedr0 += dr0[d]*dr0[d];
+			plateetadr0 += dr0[d]*dr0[d];
+			platetmin += time[d];
+			if(fabs(dr0[d])<drcut){
+			  fakeornot = 0;
+			}
+			if(fabs(dr0[d])<drcutin){
+			  platenXin += 1;
+			}
+			yofe.push_back(sqrt(x[d]*x[d]+y[d]*y[d]));//as r
+			xyofe.push_back(layerz[d]*sqrt(x[d]*x[d]+y[d]*y[d]));
+			aofe.push_back(sqrt(x[d]*x[d]+y[d]*y[d])/layerz[d]);
+			//strip_phimemory += atan2(y[d],x[d]);
+			strip_xmemory += x[d];
+			strip_ymemory += y[d];
+			strip_zmemory += z[d];
+			//exofe.at(dd) = 5.;
+			//eyofe.at(dd) = 0.435;
+			dialphi = atan2(y[d],x[d]);
+			dialphi = round(dialphi/pi*8.0)*pi/8.0;
+			if(layerbit[(d-1)%8]==1){
+			  x3d.push_back(x[d]);
+			  y3d.push_back(y[d]);
+			  z3d.push_back(layerz[d]);
+			  d3d.push_back(d);
+			  vecvec_Phidr0.at(vecvec_Phidr0.size()-1).push_back(dr0[d]);
+			  vecvec_Philayer.at(vecvec_Philayer.size()-1).push_back(d-16);
+			  vecvec_Phicoeff.at(vecvec_Phicoeff.size()-1).push_back(phicoeff[(d-1)%8]);
+			  lphi = atan2(y[d],x[d]);
+			  lphi = round(lphi/pi*8.0)*pi/8.0+pi/2.0;
+			      //cout<<"layer"<<d<<"\tlphi"<<(lphi-pi/2.0)/pi*8.0<<endl;
+			  l1ofe.at(dall) = cos(lphi);
+			  l2ofe.at(dall) = sin(lphi);
+			  l3ofe.at(dall) = 0;
+			  dall += 1;//for xuv/uv fit		  
+			}
+			dd += 1;//for eta
+		      }
+		    }else{
+		      if(layerbit[(d-1)%8]==1){
+			strip_phifraction = Dphi(la_sm-1,atan2(y[d],x[d]));
+			platedr0 += dr0[d]*dr0[d];
+			platetmin += time[d];
+			if(fabs(dr0[d])<drcutin){
+			  platenUVin += 1;
+			}
+			x3d.push_back(x[d]);
+			y3d.push_back(y[d]);
+			z3d.push_back(layerz[d]);
+			d3d.push_back(d);
+			vecvec_Phidr0.at(vecvec_Phidr0.size()-1).push_back(dr0[d]);
+			vecvec_Philayer.at(vecvec_Philayer.size()-1).push_back(d-16);
+			vecvec_Phicoeff.at(vecvec_Phicoeff.size()-1).push_back(phicoeff[(d-1)%8]);
+			dofs.push_back(d);//stereo
+			rofs.push_back(hypot(x[d],y[d])*(cos(strip_phifraction)+layersign[d]*sin(strip_phifraction)*tan(1.5*pi/180)));//stereo//degpoint   
+			signofs.push_back(layersign[d]);
+			lphi = atan2(y[d],x[d]);
+			lphi = round(lphi/pi*8.0)*pi/8.0+pi/2.0+layersign[d]*1.5/180.0*pi;//degpoint
+			l1ofe.at(dall) = cos(lphi);
+			l2ofe.at(dall) = sin(lphi);
+			l3ofe.at(dall) = 0;
+			dstereo += 1;
+			dall += 1;
+		      }
+		    }
+		  }
+		}
+		if(dd!=l){alert[2]+=1;}
+		if((uvfit>=3&&Uvalid==0&&Vvalid==0&&dall!=2)||((uvfit<=2)&&(Xuse==0)&&(dall!=k))||((uvfit==0)&&(dall!=l+k))){alert[3]+=1;}
+		if(dd==l){
+		  plateetadr0 /= 1.0*l;
+		  platedr0 /= 1.0*(l+dstereo);
+		  platetmin /= 1.0*(l+dstereo);
+		  if(analytic==0){
+		    if(robust==0){
+		      mint[n] = new TGraphErrors(l,&xofe[0],&yofe[0],&exofe[0],&eyofe[0]);
+		      linear->SetParameters(2*atan(exp(-(eta1+eta2)/2.0)),0);
+		      if(mueta>0){		      
+			linear->SetParLimits(0,0.,pi/2.0);
+		      }else{
+			linear->SetParLimits(0,pi/2.0,pi);
+		      }
+		      linear->FixParameter(1,0);
+		      mint[n]->Fit("lin","Q","",-8000,8000);
+		      if(fabs(linear->GetParameter(0)/pi*2.0-round(linear->GetParameter(0)/pi*2.0))<0.00001)alert[7]+=1;
+		      gtheta = linear->GetParameter(0);
+		      linear->ReleaseParameter(1);
+		      mint[n]->Fit("lin","Q","",-8000,8000);
+		      if(fabs(linear->GetParameter(0)/pi*2.0-round(linear->GetParameter(0)/pi*2.0))<0.00001)alert[7]+=1;
+		      ltheta = linear->GetParameter(0);
+		      if(l>2){platechi2_ndf = linear->GetChisquare()/1.0/(l-2);}else{platechi2_ndf = linear->GetChisquare()/0.1;}
+		      esdelta[l][k][s] += fabs(gtheta-ltheta);
+		      edelta[l][s] += fabs(gtheta-ltheta);
+		      zintercept = linear->GetParameter(1);
+		      rintercept = -zintercept*tan(ltheta);
+		    }
+		    if(robust==1){
+		      for(int mr=0;mr<l;mr++){
+			xfit->ReleaseParameter(mr*2);
+			xfit->ReleaseParameter(mr*2+1);
+			xfit->SetParameter(mr*2,Form("x[%d]",mr),xofe.at(mr),1,-8000,8000);
+			xfit->SetParameter(mr*2+1,Form("y[%d]",mr),yofe.at(mr),1,0,6000);
+			xfit->FixParameter(mr*2);
+			xfit->FixParameter(mr*2+1);
+		      }
+		      for(int mr=l;mr<4;mr++){
+			xfit->ReleaseParameter(mr*2);
+			xfit->ReleaseParameter(mr*2+1);
+			xfit->SetParameter(mr*2,Form("z[%d]",mr),0,1,-8000,8000);
+			xfit->SetParameter(mr*2+1,Form("r[%d]",mr),0,1,0,6000);
+			xfit->FixParameter(mr*2);
+			xfit->FixParameter(mr*2+1);
+		      }
+		      if(mueta>0){
+			xfit->SetParameter(8,"a",tan(2*atan(exp(-(eta1+eta2)/2.0))),0.5,0.0,1.0);
+		      }else{
+			xfit->SetParameter(8,"a",tan(2*atan(exp(-(eta1+eta2)/2.0))),0.5,-1.0,0.0);
+		      }
+		      xfit->SetParameter(9,"b",0,300,-2000,2000);
+		      xfit->FixParameter(9);
+		      xfit->ExecuteCommand("MIGRAD",0,0);
+		      if(fabs(atan(xfit->GetParameter(8))/pi*2.0-round(atan(xfit->GetParameter(8))/pi*2.0))<0.00001)alert[7]+=1;
+		      //gtheta = atan(xfit->GetParameter(8));
+		      
+		      xfit->ReleaseParameter(9);
+		      xfit->SetParameter(9,"b",0,300,-2000,2000);
+		      xfit->ExecuteCommand("MIGRAD",0,0);
+		      /*while(fabs(fabs(minuit->GetParameter(61))-pi)<0.00000001){
+			piphi = minuit->GetParameter(61);
+			cout<<piphi<<endl;
+			minuit->SetParameter(61,"phi",-piphi*0.99,0.1,-pi,pi);
+			minuit->ExecuteCommand("MIGRAD",0,0);
+			//cout<<platephi0<<" : "<<minuit->GetParameter(61)<<endl;//for phi
+			}
+			minuit->ExecuteCommand("MIGRAD",0,0);
+			while(fabs(fabs(minuit->GetParameter(61))-pi)<0.00000001){
+			piphi = minuit->GetParameter(61);
+			cout<<piphi<<endl;
+			minuit->SetParameter(61,"phi",-piphi*0.99,0.1,-pi,pi);
+			minuit->ExecuteCommand("MIGRAD",0,0);
+			//cout<<platephi0<<" : "<<minuit->GetParameter(61)<<endl;//for phi*/                                         
+		      if(fabs(atan(xfit->GetParameter(8))/pi*2.0-round(atan(xfit->GetParameter(8))/pi*2.0))<0.00001)alert[7]+=1;
+		      ltheta = atan(xfit->GetParameter(8));
+		      //if(l>2){platechi2_ndf = xfit->GetChisquare()/1.0/(l-2);}else{platechi2_ndf = xfit->GetChisquare()/0.1;}
+		      esdelta[l][k][s] += fabs(gtheta-ltheta);
+		      edelta[l][s] += fabs(gtheta-ltheta);
+		      rintercept = xfit->GetParameter(9);
+		      zintercept = -rintercept/tan(ltheta);
+		      
+		      xfit->ReleaseParameter(8);
+		      xfit->ReleaseParameter(9);
+		      gtheta = atan(TMath::Mean(l,&xyofe[0])/(TMath::RMS(l,&xofe[0])*TMath::RMS(l,&xofe[0])*(l-1)/l+TMath::Mean(l,&xofe[0])*TMath::Mean(l,&xofe[0])));
+		      
+		    }	   
+		  }else{
+		    if(checkexp==1){
+		      for(int ppp=0;ppp<l;ppp++){
+			cout<<xofe[ppp]<<"\t"<<yofe[ppp]<<endl;
+		      }
+		    }
+		    //cout<<TMath::RMS(l,&xofe[0])<<endl;
+		    if(analytic==1){
+		      if(takemean==0){
+			gtheta = atan(TMath::Mean(l,&xyofe[0])/(TMath::RMS(l,&xofe[0])*TMath::RMS(l,&xofe[0])*(l-1)/l+TMath::Mean(l,&xofe[0])*TMath::Mean(l,&xofe[0])));
+		      }else{
+			gtheta = atan(TMath::Mean(l,&aofe[0]));	
+		      }
+
+		      ltheta = atan((TMath::Mean(l,&xyofe[0])-TMath::Mean(l,&xofe[0])*TMath::Mean(l,&yofe[0]))/(TMath::RMS(l,&xofe[0])*TMath::RMS(l,&xofe[0])*(l-1)/l));
+		      if(checkexp==1){cout<<"gthetacheck"<<gtheta<<endl;
+			cout<<"lthetacheck"<<ltheta<<endl;}
+		      if(l>2){
+			platechi2_ndf = TMath::RMS(l,&yofe[0])*TMath::RMS(l,&yofe[0])*(l-1)/l-(TMath::Mean(l,&xyofe[0])-TMath::Mean(l,&xofe[0])*TMath::Mean(l,&yofe[0]))*(TMath::Mean(l,&xyofe[0])-TMath::Mean(l,&xofe[0])*TMath::Mean(l,&yofe[0]))/TMath::RMS(l,&xofe[0])/TMath::RMS(l,&xofe[0])/(l-1)*l/(l-2);
+		      }else{
+			platechi2_ndf = TMath::RMS(l,&yofe[0])*TMath::RMS(l,&yofe[0])*(l-1)/l-(TMath::Mean(l,&xyofe[0])-TMath::Mean(l,&xofe[0])*TMath::Mean(l,&yofe[0]))*(TMath::Mean(l,&xyofe[0])-TMath::Mean(l,&xofe[0])*TMath::Mean(l,&yofe[0]))/TMath::RMS(l,&xofe[0])/TMath::RMS(l,&xofe[0])/(l-1)*l/0.1;
+		      }
+		      esdelta[l][k][s] += fabs(gtheta-ltheta);
+		      edelta[l][s] += fabs(gtheta-ltheta);
+		      rintercept = TMath::Mean(l,&yofe[0])-TMath::Mean(l,&xofe[0])*tan(ltheta);
+		      zintercept = -rintercept/tan(ltheta);
+		    }
+
+		    if(analytic==2){
+		      mint[n] = new TGraphErrors(l,&xofe[0],&yofe[0],&exofe[0],&eyofe[0]);
+		      linearl->SetParameters(tan(2*atan(exp(-(eta1+eta2)/2.0))),0);
+		      if(mueta>0){
+			linearl->SetParLimits(0,0.,1000.);
+		      }else{
+			linearl->SetParLimits(0,-1000.,0.);
+		      }
+		      linearl->FixParameter(1,0);
+		      mint[n]->Fit("linl","QC","",-8000,8000);
+		      //if(fabs(linearl->GetParameter(0)/pi*2.0-round(linearl->GetParameter(0)/pi*2.0))<0.00001)alert[7]+=1;
+		      gtheta = atan(linearl->GetParameter(0));
+		      linearl->ReleaseParameter(1);
+		      mint[n]->Fit("linl","QC","",-8000,8000);
+		      //if(fabs(linearl->GetParameter(0)/pi*2.0-round(linearl->GetParameter(0)/pi*2.0))<0.00001)alert[7]+=1;
+		      ltheta = atan(linearl->GetParameter(0));
+		      if(l>2){platechi2_ndf = linearl->GetChisquare()/1.0/(l-2);}else{platechi2_ndf = linearl->GetChisquare()/0.1;}
+		      esdelta[l][k][s] += fabs(gtheta-ltheta);
+		      edelta[l][s] += fabs(gtheta-ltheta);
+		      zintercept = linearl->GetParameter(1);
+		      rintercept = -zintercept*tan(ltheta);
+		    }
+		  }
+		  
+		  plateresid2dl.erase(plateresid2dl.begin(),plateresid2dl.end());
+		  plateresid2dg.erase(plateresid2dg.begin(),plateresid2dg.end());
+		  for(int mr=0;mr<dd;mr++){
+		    resid = yofe.at(mr)-tan(ltheta)*xofe.at(mr)+tan(ltheta)*zintercept;
+		    residhist[4]->Fill(/*xofe.at(mr),*/resid);
+		    plateresid2dl.push_back(resid);
+		    resid = yofe.at(mr)-tan(gtheta)*xofe.at(mr);
+		    residhist[5]->Fill(/*xofe.at(mr),*/resid);
+		    plateresid2dg.push_back(resid);
+		  }
+		  if(Xuse==1){
+		    for(int pp=0;pp<dofs.size();pp++){
+		      rhat = tan(ltheta)*layerz[dofs.at(pp)]-tan(ltheta)*zintercept;
+		      resid = rofs.at(pp)-rhat;
+		      estimated_phifraction += signofs.at(pp)*atan(resid/rhat/tan(1.5/180*pi));
+		    }
+		    if(dofs.size()!=0)estimated_phifraction /= dofs.size();
+		  }else{
+		    rplus = 0;
+		    rminus = 0;
+		    dplus = 0; dminus = 0;
+		    for(int pp=0;pp<dofs.size();pp++){
+		      if(signofs.at(pp)==1){
+			    dplus += 1;
+			    rplus += rofs.at(pp); 
+		      }
+		      if(signofs.at(pp)==-1){
+			dminus += 1;
+			rminus += rofs.at(pp);
+		      }
+		    }
+		    rplus /= 1.0*dplus;
+		    rminus /= 1.0*dminus;
+		    rhat = (rplus+rminus)/2.0;
+		    resid = rplus-rhat;
+		    estimated_phifraction = atan(resid/rhat/tan(1.5/180*pi));
+		  }
+		  
+		  if(platesnf!=dofs.size())alert[5] += 1;
+		  strip_xmemory /= l;
+		  strip_ymemory /= l;
+		  strip_zmemory /= l;
+		  strip_phimemory = atan2(strip_ymemory,strip_xmemory);
+		  
+		}
+		
+		if(checkexp==1)cout<<"minuit"<<endl;//check6
+		plateXpat = SectorXpat(dofe.size(),&dofe[0]);
+		platePhipat = SectorAllpat(d3d.size(),&d3d[0]);
+		platePhiXpat = SectorXpat(d3d.size(),&d3d[0]);
+		plateUVpat = SectorUVpat(d3d.size(),&d3d[0]);
+		cout<<plateXpat<<"\t"<<plateUVpat<<"\t"<<platePhipat<<"\t"<<platePhiXpat<<endl;
+		
+		for(int mr=0;mr<dall;mr++){
+		  minuit->ReleaseParameter(mr*6);
+		  minuit->ReleaseParameter(mr*6+1);
+		  minuit->ReleaseParameter(mr*6+2);
+		  minuit->ReleaseParameter(mr*6+3);
+		  minuit->ReleaseParameter(mr*6+4);
+		  minuit->ReleaseParameter(mr*6+5);
+		  minuit->SetParameter(mr*6,Form("x[%d]",mr),x3d.at(mr),1,-4500,4500);
+		  minuit->SetParameter(mr*6+1,Form("y[%d]",mr),y3d.at(mr),1,-4500,4500);
+		  minuit->SetParameter(mr*6+2,Form("z[%d]",mr),z3d.at(mr),1,-8000,8000);
+		  minuit->SetParameter(mr*6+3,Form("l1[%d]",mr),l1ofe.at(mr),1,-100.,100.);
+		  minuit->SetParameter(mr*6+4,Form("l2[%d]",mr),l2ofe.at(mr),1,-100.,100.);
+		  minuit->SetParameter(mr*6+5,Form("l3[%d]",mr),l3ofe.at(mr),1,-100.,100.);
+		  minuit->FixParameter(mr*6);
+		  minuit->FixParameter(mr*6+1);
+		  minuit->FixParameter(mr*6+2);
+		  minuit->FixParameter(mr*6+3);
+		  minuit->FixParameter(mr*6+4);
+		  minuit->FixParameter(mr*6+5);
+		}
+		
+		for(int mr=dall;mr<10;mr++){
+		  minuit->ReleaseParameter(mr*6);
+		  minuit->ReleaseParameter(mr*6+1);
+		  minuit->ReleaseParameter(mr*6+2);
+		  minuit->ReleaseParameter(mr*6+3);
+		  minuit->ReleaseParameter(mr*6+4);
+		  minuit->ReleaseParameter(mr*6+5);
+		  minuit->SetParameter(mr*6,Form("x[%d]",mr),0,1,-4500,4500);
+		  minuit->SetParameter(mr*6+1,Form("y[%d]",mr),0,1,-4500,4500);
+		  minuit->SetParameter(mr*6+2,Form("z[%d]",mr),0,1,-8000,8000);
+		  minuit->SetParameter(mr*6+3,Form("l1[%d]",mr),l1ofe.at(mr),1,-100.,100.);
+		  minuit->SetParameter(mr*6+4,Form("l2[%d]",mr),l2ofe.at(mr),1,-100.,100.);
+		  minuit->SetParameter(mr*6+5,Form("l3[%d]",mr),l3ofe.at(mr),1,-100.,100.);
+		  minuit->FixParameter(mr*6);
+		  minuit->FixParameter(mr*6+1);
+		  minuit->FixParameter(mr*6+2);
+		  minuit->FixParameter(mr*6+3);
+		  minuit->FixParameter(mr*6+4);
+		  minuit->FixParameter(mr*6+5);
+		}
+		minuit->SetParameter(62,"a",0,300,-2000,2000);
+		minuit->SetParameter(63,"b",0,300,-2000,2000);
+		minuit->FixParameter(62);
+		minuit->FixParameter(63);
+		
+		if(l3d==1){
+		  minuit->SetParameter(64,"c",zintercept,300,-2000,2000);
+		  if(z3d.at(0)>0){
+		    if(Xuse==1){
+		      minuit->SetParameter(60,"theta",atan(tan(ltheta)/cos(estimated_phifraction)),0.1,0.,pi/2.0);
+		    }else{
+		      minuit->SetParameter(60,"theta",atan(signfunc(mueta)*rhat/(layerz[la_sm*8+9]+layerz[la_sm*8+16])*2.0)/cos(estimated_phifraction),0.1,0.,pi/2.0);
+		    }
+		  }else{
+		    if(Xuse==1){
+		      minuit->SetParameter(60,"theta",atan(tan(ltheta)/cos(estimated_phifraction)),0.1,pi/2.0,pi);
+			}else{
+		      minuit->SetParameter(60,"theta",atan(signfunc(mueta)*rhat/(layerz[la_sm*8+9]+layerz[la_sm*8+16])*2.0)/cos(estimated_phifraction),0.1,pi/2.0,pi);
+		    }
+		  }
+		  minuit->SetParameter(61,"phi",dialphi+estimated_phifraction,0.1,-pi,pi);
+		  //cout<<platephi0<<" : "<<dialphi+estimated_phifraction<<endl;//for phi
+		  minuit->FixParameter(60);
+		  minuit->FixParameter(61);
+		  minuit->ExecuteCommand("MIGRAD",0,0);
+		  minuit->ReleaseParameter(60);
+		  minuit->ReleaseParameter(61);
+		  minuit->ExecuteCommand("MIGRAD",0,0);
+		  //cout<<platephi0<<" : "<<minuit->GetParameter(61)<<endl;//for phi    
+		  while(fabs(fabs(minuit->GetParameter(61))-pi)<0.00000001){
+		    piphi = minuit->GetParameter(61);
+		    cout<<piphi<<endl;
+		    minuit->SetParameter(61,"phi",-piphi*0.99,0.1,-pi,pi);
+		    minuit->ExecuteCommand("MIGRAD",0,0);
+		    //cout<<platephi0<<" : "<<minuit->GetParameter(61)<<endl;//for phi  
+		  }
+		  minuit->ExecuteCommand("MIGRAD",0,0);
+		  while(fabs(fabs(minuit->GetParameter(61))-pi)<0.00000001){
+		    piphi = minuit->GetParameter(61);
+		    cout<<piphi<<endl;
+		    minuit->SetParameter(61,"phi",-piphi*0.99,0.1,-pi,pi);
+		    minuit->ExecuteCommand("MIGRAD",0,0);
+		    //cout<<platephi0<<" : "<<minuit->GetParameter(61)<<endl;//for phi      
+		  }
+		  minuit->ExecuteCommand("MIGRAD",0,0);
+		  while(fabs(fabs(minuit->GetParameter(61))-pi)<0.00000001){
+		    piphi = minuit->GetParameter(61);
+		    cout<<piphi<<endl;
+		    minuit->SetParameter(61,"phi",-piphi*0.99,0.1,-pi,pi);
+		    minuit->ExecuteCommand("MIGRAD",0,0);
+		    //cout<<platephi0<<" : "<<minuit->GetParameter(61)<<endl;//for phi \
+		    
+		  }
+		  
+		      
+		  ltheta3d = minuit->GetParameter(60);
+		  lphi3d = minuit->GetParameter(61);
+		  //cout<<platephi0<<" : "<<lphi3d<<endl;//for phi    
+		  zintercept3d = minuit->GetParameter(64);
+		  aofz0 = intersecX(0,0,zintercept3d,gtheta3d,gphi3d,0);
+		  bofz0 = intersecY(0,0,zintercept3d,gtheta3d,gphi3d,0);
+		}
+		
+		minuit->SetParameter(64,"c",0,300,-2000,2000);
+		minuit->FixParameter(64);
+		if(z3d.at(0)>0){
+		  if(Xuse==1){
+		    minuit->SetParameter(60,"theta",atan(tan(gtheta)/cos(estimated_phifraction)),0.1,0.,pi/2.0);
+		  }else{
+		    minuit->SetParameter(60,"theta",atan(signfunc(mueta)*rhat/(layerz[la_sm*8+9]+layerz[la_sm*8+16])*2.0)/cos(estimated_phifraction),0.1,0.,pi/2.0);
+		  }
+		}else{
+		  if(Xuse==1){
+		    minuit->SetParameter(60,"theta",atan(tan(gtheta)/cos(estimated_phifraction)),0.1,pi/2.0,pi);
+		  }else{
+		    minuit->SetParameter(60,"theta",atan(signfunc(mueta)*rhat/(layerz[la_sm*8+9]+layerz[la_sm*8+16])*2.0)/cos(estimated_phifraction),0.1,pi/2.0,pi);
+		  }
+		}
+		minuit->SetParameter(61,"phi",dialphi+estimated_phifraction,0.1,-pi,pi);
+		//cout<<platephi0<<" : "<<dialphi+estimated_phifraction<<endl;//for phi
+		
+		minuit->ExecuteCommand("MIGRAD",0,0);
+		while(fabs(fabs(minuit->GetParameter(61))-pi)<0.00000001){
+		  piphi = minuit->GetParameter(61);
+		  cout<<piphi<<endl;
+		  minuit->SetParameter(61,"phi",-piphi*0.99,0.1,-pi,pi);
+		  minuit->ExecuteCommand("MIGRAD",0,0);
+		  //cout<<platephi0<<" : "<<minuit->GetParameter(61)<<endl;//for phi                         
+		}
+		minuit->ExecuteCommand("MIGRAD",0,0);
+		while(fabs(fabs(minuit->GetParameter(61))-pi)<0.00000001){
+		  piphi = minuit->GetParameter(61);
+		  cout<<piphi<<endl;
+		  minuit->SetParameter(61,"phi",-piphi*0.99,0.1,-pi,pi);
+		  minuit->ExecuteCommand("MIGRAD",0,0);
+		  //cout<<platephi0<<" : "<<minuit->GetParameter(61)<<endl;//for phi 		      			   
+		}
+		minuit->ExecuteCommand("MIGRAD",0,0);
+		while(fabs(fabs(minuit->GetParameter(61))-pi)<0.00000001){
+		  piphi = minuit->GetParameter(61);
+		  cout<<piphi<<endl;
+		  minuit->SetParameter(61,"phi",-piphi*0.99,0.1,-pi,pi);
+		  minuit->ExecuteCommand("MIGRAD",0,0);
+		  //cout<<platephi0<<" : "<<minuit->GetParameter(61)<<endl;//for phi \
+                  
+		}
+		minuit->ExecuteCommand("MIGRAD",0,0);
+		while(fabs(fabs(minuit->GetParameter(61))-pi)<0.00000001){
+		  piphi = minuit->GetParameter(61);
+		  cout<<piphi<<endl;
+		  minuit->SetParameter(61,"phi",-piphi*0.99,0.1,-pi,pi);
+		  minuit->ExecuteCommand("MIGRAD",0,0);
+		  //cout<<platephi0<<" : "<<minuit->GetParameter(61)<<endl;//for phi \
+                  
+		}
+		minuit->ReleaseParameter(62);
+		minuit->ReleaseParameter(63);                  
+		minuit->ReleaseParameter(64);
+		
+		gtheta3d = minuit->GetParameter(60);
+		gphi3d = minuit->GetParameter(61);
+		if(firsttime==0){//start of hit
+		  if(checkexp==1)cout<<"hitstart"<<endl;//check4
+		  firsttime = 1;
+		  //data->GetEntry(n);		    
+		  //initialize
+		  hit_phimemory = 0;
+		  hit_thetamemory = 0;
+		  hit_xmemory = 0;
+		  hit_ymemory = 0;
+		  hit_zmemory = 0;
+		  hit_dphi = 0;
+		  
+		  for(int d=0;d<33;d++){
+		    mur[d] = 0;
+		    mut[d] = 0;
+		  }
+		  
+		  //initialize                                                
+		  int ddd = 0;
+		  
+		  hitxofe.erase(hitxofe.begin(),hitxofe.end());
+		  hityofe.erase(hityofe.begin(),hityofe.end());
+		  hitxyofe.erase(hitxyofe.begin(),hitxyofe.end());
+		  hit3dxofe.erase(hit3dxofe.begin(),hit3dxofe.end());
+		  hit3dyofe.erase(hit3dyofe.begin(),hit3dyofe.end());
+		  hit3dzofe.erase(hit3dzofe.begin(),hit3dzofe.end());
+		  
+		  //for hitpoints
+		  for(int d=0;d<33;d++){
+		    
+		    if(signfunc(d-16)==signfunc(mueta)&&(abs(d-16)>8)+1==la_sm){
+		      if(hitt0[d]==0)alert[6]+=1;
+		      phifraction = Dphi(la_sm-1,atan2(hity0[d],hitx0[d]));
+		      if(layersign[d]==0){
+			/*in 2D, comparison for Xstrip is only needed, so do not reckon 1.5deg*/
+			hitxofe.push_back(hitz0[d]);
+			hityofe.push_back(hypot(hitx0[d],hity0[d])*cos(phifraction));
+			hitxyofe.push_back(hitz0[d]*hypot(hitx0[d],hity0[d])*cos(phifraction));
+		      }
+		      hit_xmemory += hitx0[d];
+		      hit_ymemory += hity0[d];
+		      hit_zmemory += hitz0[d];
+		      mur[d] = hypot(hitx0[d],hity0[d])*(cos(phifraction)+layersign[d]*sin(phifraction)*tan(1.5*pi/180));
+		      mut[d] = hitt0[d];
+		      
+		      hit3dxofe.push_back(hitx0[d]);
+		      hit3dyofe.push_back(hity0[d]);
+		      hit3dzofe.push_back(hitz0[d]);
+		      ddd += 1;
+		    } 
+		    
+		  }
+		  
+		  if(hitxofe.size()!=4)alert[6]+=1;
+		  if(ddd!=8)alert[6]+=1;
+		  if(ddd!=0){
+		    hit_xmemory /= ddd;
+		    hit_ymemory /= ddd;
+		    hit_zmemory /= ddd;
+		    hit_phimemory = atan2(hit_ymemory,hit_xmemory);
+		    hit_thetamemory = atan2(hypot(hit_xmemory,hit_ymemory),hit_zmemory);
+		  }		      
+		  
+		  //for 2dtrack
+		  if(hitxofe.size()>1){
+		    if(analytic==0){
+		      hit[n] = new TGraphErrors(hitxofe.size(),&hitxofe[0],&hityofe[0],&hitexofe[0],&hiteyofe[0]);
+		      linear->SetParameters(2*atan(exp(-(eta1+eta2)/2.0)),0);
+		      linear->SetParLimits(0,0.,pi);
+		      linear->FixParameter(1,0);
+		      hit[n]->Fit("lin","Q","",-8000,8000);
+		      hit_gtheta = linear->GetParameter(0);
+		      linear->ReleaseParameter(1);
+		      hit[n]->Fit("lin","Q","",-8000,8000);
+		      hit_ltheta = linear->GetParameter(0);
+		      hit_zintercept = linear->GetParameter(1);
+		      hit_rintercept = -hit_zintercept*tan(hit_ltheta);
+		      if(Xtruth==1){
+			if(la_sm==1)hit_gtheta = atan(tan(hit_ltheta)+hit_rintercept/(layerz[20]+layerz[21])*2.0);
+			if(la_sm==2)hit_gtheta = atan(tan(hit_ltheta)+hit_rintercept/(layerz[28]+layerz[29])*2.0);
+		      }
+		      intercepthist[1]->Fill(hit_zintercept,hit_ltheta-hit_gtheta);
+		      intercepthist[3]->Fill(hit_ltheta-hit_gtheta,ltheta-gtheta);
+		    }else{
+		      hit_gtheta = atan(TMath::Mean(4,&hitxyofe[0])/(TMath::RMS(4,&hitxofe[0])*TMath::RMS(4,&hitxofe[0])*(4-1)/4+TMath::Mean(4,&hitxofe[0])*TMath::Mean(4,&hitxofe[0])));
+		      hit_ltheta = atan((TMath::Mean(4,&hitxyofe[0])-TMath::Mean(4,&hitxofe[0])*TMath::Mean(4,&hityofe[0]))/(TMath::RMS(4,&hitxofe[0])*TMath::RMS(4,&hitxofe[0])*(4-1)/4));
+		      if(checkexp==1){cout<<"hit_gthetacheck"<<hit_gtheta<<endl;
+			cout<<"hit_lthetacheck"<<hit_ltheta<<endl;}
+		      
+		      //platechi2_ndf = TMath::RMS(4,&hityofe[0])*TMath::RMS(4,&hityofe[0])*(4-1)/4-(TMath::Mean(4,&hitxyofe[0])-TMath::Mean(4,&hitxofe[0])*TMath::Mean(4,&hityofe[0]))*(TMath::Mean(4,&hitxyofe[0])-TMath::Mean(4,&hitxofe[0])*TMath::Mean(4,&hityofe[0]))/TMath::RMS(4,&hitxofe[0])/TMath::RMS(4,&hitxofe[0])/(4-1)*4/(4-2);
+		      
+		      hit_rintercept = TMath::Mean(4,&hityofe[0])-TMath::Mean(4,&hitxofe[0])*tan(hit_ltheta);
+		      hit_zintercept = -hit_rintercept/tan(hit_ltheta);
+		      if(Xtruth==1){
+			if(la_sm==1)hit_gtheta = atan(tan(hit_ltheta)+hit_rintercept/(layerz[20]+layerz[21])*2.0);
+			if(la_sm==2)hit_gtheta = atan(tan(hit_ltheta)+hit_rintercept/(layerz[28]+layerz[29])*2.0);
+		      }
+		      intercepthist[1]->Fill(hit_zintercept,hit_ltheta-hit_gtheta);
+		      intercepthist[3]->Fill(hit_ltheta-hit_gtheta,ltheta-gtheta);
+		    }
+		    //for 3dtrack
+		    for(int mr=0;mr<ddd;mr++){
+		      track->ReleaseParameter(mr*3);
+		      track->ReleaseParameter(mr*3+1);
+		      track->ReleaseParameter(mr*3+2);
+		      track->SetParameter(mr*3,Form("x[%d]",mr),hit3dxofe.at(mr),1,-4500,4500);
+		      track->SetParameter(mr*3+1,Form("y[%d]",mr),hit3dyofe.at(mr),1,-4500,4500);
+		      track->SetParameter(mr*3+2,Form("z[%d]",mr),hit3dzofe.at(mr),1,-8000,8000);
+		      track->FixParameter(mr*3);
+		      track->FixParameter(mr*3+1);
+		      track->FixParameter(mr*3+2);
+		    }
+		    for(int mr=ddd;mr<10;mr++){
+		      track->ReleaseParameter(mr*3);
+		      track->ReleaseParameter(mr*3+1);
+		      track->ReleaseParameter(mr*3+2);
+		      track->SetParameter(mr*3,Form("x[%d]",mr),0,1,-4500,4500);
+		      track->SetParameter(mr*3+1,Form("y[%d]",mr),0,1,-4500,4500);
+		      track->SetParameter(mr*3+2,Form("z[%d]",mr),0,1,-8000,8000);
+		      track->FixParameter(mr*3);
+		      track->FixParameter(mr*3+1);
+		      track->FixParameter(mr*3+2);
+		    }
+		    
+		    track->SetParameter(32,"a",truth_aofz0,100,-2000,2000);
+		    track->SetParameter(33,"b",truth_bofz0,100,-2000,2000);
+		    if(hit3dzofe.at(0)>0){track->SetParameter(30,"theta",platetheta0,0.1,0.,pi/2.0);}else{
+		      track->SetParameter(30,"theta",platetheta0,0.1,pi/2.0,pi);}
+		    track->SetParameter(31,"phi",platephi0,0.1,-pi,pi);
+		    track->FixParameter(30);
+		    track->FixParameter(31);
+		    track->ExecuteCommand("MIGRAD",0,0);
+		    track->ReleaseParameter(30);
+		    track->ReleaseParameter(31);
+		    track->ExecuteCommand("MIGRAD",0,0);
+		    track->ExecuteCommand("MIGRAD",0,0);
+		    track->ExecuteCommand("MIGRAD",0,0);
+		    track->ExecuteCommand("MIGRAD",0,0);
+		    
+		    hit_aofz0 = track->GetParameter(32);
+		    hit_bofz0 = track->GetParameter(33);
+		    hit_3dtheta = track->GetParameter(30);
+		    hit_3dphi = track->GetParameter(31);
+		    //cout<<platephi0<<" : "<<dialphi+estimated_phifraction<<" : "<<hit_3dphi<<endl;//for phi   
+		    intercepthist[0]->Fill(hit_aofz0-truth_aofz0,hit_bofz0-truth_bofz0);
+		    /*cout<<"hit_aofz0"<<hit_aofz0<<endl;
+		      cout<<"hit_bofz0"<<hit_bofz0<<endl;
+		      cout<<hit_3dtheta<<"\t"<<hit_ltheta<<endl;
+		      cout<<hit_3dphi<<"\t"<<phimemory<<endl;*/
+		    
+		    //for 2dtrack resid
+		    for(int mr=0;mr<hitxofe.size();mr++){
+		      resid = hityofe.at(mr)-tan(hit_ltheta)*hitxofe.at(mr)+tan(hit_ltheta)*hit_zintercept;
+		      residhist[0]->Fill(/*hitxofe.at(mr),*/resid);
+		      resid = hityofe.at(mr)-tan(hit_gtheta)*hitxofe.at(mr);
+		      residhist[1]->Fill(/*hitxofe.at(mr),*/resid);
+		    }
+		    
+		    //for 3dtrack resid(distance)
+		    for(int mr=0;mr<ddd;mr++){
+		      resid = sqrt(distance1(hit_aofz0, hit_bofz0, 0, sin(hit_3dtheta)*cos(hit_3dphi), sin(hit_3dtheta)*sin(hit_3dphi), cos(hit_3dtheta), hit3dxofe.at(mr), hit3dyofe.at(mr), hit3dzofe.at(mr)));	  
+		      residhist[2]->Fill(resid);
+		    }
+		    
+		    resid = sqrt(distance1(hit_aofz0, hit_bofz0, 0, sin(hit_3dtheta)*cos(hit_3dphi), sin(hit_3dtheta)*sin(hit_3dphi), cos(hit_3dtheta), x0, y0, z0));
+		    
+		    residhist[3]->Fill(resid);
+		    
+		  }
+		}//last of hit
+		if(checkexp==1){
+		  cout<<platendata<<"th DATA Entry"<<platei<<endl;//datacheck
+		  cout<<"mueta"<<plateeta0<<" : "<<eta0<<endl;
+		}
+		if(hit3dxofe.size()!=0){
+		  hit_gz = TMath::Mean(z3d.size(),&z3d[0]);
+		  if(UVtruth==1){
+		    if(la_sm==1)hit_gz = (layerz[20]+layerz[21])/2.0;
+		    if(la_sm==2)hit_gz = (layerz[28]+layerz[29])/2.0;
+		  }
+		  hit_gx = interseclX(hit3dxofe.at(0),hit3dyofe.at(0),hit3dzofe.at(0),hit3dxofe.at(hit3dxofe.size()-1),hit3dyofe.at(hit3dyofe.size()-1),hit3dzofe.at(hit3dzofe.size()-1),hit_gz);
+		  hit_gy = interseclY(hit3dxofe.at(0),hit3dyofe.at(0),hit3dzofe.at(0),hit3dxofe.at(hit3dxofe.size()-1),hit3dyofe.at(hit3dyofe.size()-1),hit3dzofe.at(hit3dzofe.size()-1),hit_gz);
+		  hit_gphi3d = atan2(hit_gy,hit_gx);
+		  hit_gtheta3d = atan2(hypot(hit_gx,hit_gy),hit_gz);
+		}else{
+		  hit_gphi3d = 0;hit_gtheta3d=0;alert[8]+=1;
+		  cout<<"SIZE0error "<<platendata<<"th DATA Entry"<<platei<<endl;
+		  cout<<"mueta"<<plateeta0<<" : "<<eta0<<endl;
+		}
+		
+		cout<<platei<<endl;
+		intercepthist[3]->Fill(aofz0-hit_aofz0,bofz0-hit_bofz0);
+		cout<<"aofz0-hit_aofz0"<<fabs(aofz0-hit_aofz0)<<endl;
+		cout<<"bofz0-hit_bofz0"<<fabs(bofz0-hit_bofz0)<<endl;
+		cout<<fabs(gtheta3d-hit_gtheta3d)<<endl;
+		cout<<fabs(gphi3d-hit_gphi3d)<<endl;		  
+		cout<<"lthetacheck"<<fabs(ltheta-hit_ltheta)<<endl;
+		cout<<"gthetacheck"<<fabs(gtheta-hit_gtheta)<<endl;
+		delta[0] += ltheta - hit_ltheta;
+		//cout<<"hit_gtheta-eta"<<hit_gtheta-atan(tan(2*atan(exp(-eta)))*cos(phi))<<endl;
+		
+		delta[1] += gtheta - hit_gtheta;
+		nn += 1;
+		esdelta[l][k][s] += fabs(gtheta-ltheta);
+		hit_esdelta[l][k][s] += fabs(hit_gtheta-hit_ltheta);
+		sigma_sltheta[l][k][s] += (ltheta-hit_ltheta)*(ltheta-hit_ltheta);
+		sigma_sgtheta[l][k][s] += (gtheta-hit_gtheta)*(gtheta-hit_gtheta);
+		edelta[l][s] += fabs(gtheta-ltheta);
+		hit_edelta[l][s] += fabs(hit_gtheta-hit_ltheta);
+		sigma_ltheta[l][s] += (ltheta-hit_ltheta)*(ltheta-hit_ltheta);
+		sigma_gtheta[l][s] += (gtheta-hit_gtheta)*(gtheta-hit_gtheta);
+		
+		//for dr2d dt2d
+		dr2d = 0;
+		dt2d = 0;
+		
+		for(int mr=0;mr<dd;mr++){
+		  for(int d=0;d<33;d++){
+		    if(fabs(xofe.at(mr)-layerz[d])<zwidth){
+		      dr2d += (yofe.at(mr)-tan(hit_ltheta)*(layerz[d]-hit_zintercept))*(yofe.at(mr)-tan(hit_ltheta)*(layerz[d]-hit_zintercept));
+		      dt2d += (time[d]-mut[d])*(time[d]-mut[d]);
+		      if(d==16)alert[1]+=1;
+		    }
+		  }
+		}
+		if(dd!=0){
+		  dr2d = sqrt(dr2d/dd);
+		  dt2d = sqrt(dt2d/dd); 
+		}
+		
+		
+		//d3->Fill();
+		on = 1;
+		f = f+1;
+		//cout<<platephi0<<" : "<<dialphi+estimated_phifraction<<" : "<<hit_3dphi<<endl;//for phi
+		vec_band.push_back(band);
+		vec_passband.push_back(passband);
+		vec_dr2d.push_back(dr2d);
+		vec_zintercept.push_back(zintercept);
+		vec_rintercept.push_back(rintercept);
+		vec_hit_zintercept.push_back(hit_zintercept);
+		vec_hit_rintercept.push_back(hit_rintercept);
+		vec_ltheta.push_back(ltheta);
+		vec_gtheta.push_back(gtheta);
+		vec_hit_ltheta.push_back(hit_ltheta);
+		vec_hit_gtheta.push_back(hit_gtheta);
+		vec_ltheta3d.push_back(ltheta3d);
+		vec_lphi3d.push_back(lphi3d);
+		vec_hit_3dtheta.push_back(hit_3dtheta);
+		vec_hit_3dphi.push_back(hit_3dphi);
+		vec_gtheta3d.push_back(gtheta3d);
+		vec_gphi3d.push_back(gphi3d);
+		vec_hit_gtheta3d.push_back(hit_gtheta3d);
+		vec_hit_gphi3d.push_back(hit_gphi3d);
+		vec_zintercept3d.push_back(zintercept3d);
+		vec_hit_phimemory.push_back(hit_phimemory);
+		vec_hit_thetamemory.push_back(hit_thetamemory);
+		vec_strip_phimemory.push_back(strip_phimemory);
+		vec_timewindow.push_back(platetimewindow);
+		vec_nlayer.push_back(platenf);
+		vec_nUV.push_back(platesnf);
+		vec_nX.push_back(plateneta);
+		vec_nUVin.push_back(platenUVin);
+		vec_nXin.push_back(platenXin);
+		vec_Xpat.push_back(plateXpat);
+		vec_UVpat.push_back(plateUVpat);
+		vec_Phipat.push_back(platePhipat);
+		vec_PhiXpat.push_back(platePhiXpat);
+		vec_Uvalid.push_back(Uvalid);
+		vec_Vvalid.push_back(Vvalid);
+		vec_grade.push_back(grade);
+		vec_estimated_phifraction.push_back(estimated_phifraction);
+		vec_sector.push_back(platesector);
+		vec_sectoron.push_back(platesectoron);
+		vec_chi2_ndf.push_back(platechi2_ndf);
+		vec_dr0.push_back(platedr0);
+		vec_etadr0.push_back(plateetadr0);
+		vec_tmin.push_back(platetmin);
+		vec_fakeornot.push_back(fakeornot);
+		if(s==2)passband += 1;
+	      }//last of needs 1~4UV
+	    }//last of needs 2~4X
+	  }//last of s loop
+	}//last of 4 eta layer through
+      }//last of 8 layer through
       
       
       if(on==1){
@@ -2210,7 +2504,7 @@ void difalpha(){
 	hitbutcut += 1; 
       }
       
-      m += 1;
+      m += 1;//band
       if(m < nfast){
 	tree->GetEntry(m);
 	cout<<"entry"<<n<<"nfast"<<m<<" : "<<ndata<<" : "<<platendata<<endl;
@@ -2242,10 +2536,10 @@ void difalpha(){
   tract[3][0]=3;tract[3][1]=3;
   tract[4][0]=4;tract[4][1]=4;
 
-  TH1D *xuvlhist[3];
-  TH1D *xuvghist[3];
+  TH1D *xuvlhist[maxs];
+  TH1D *xuvghist[maxs];
 
-  for(int s=0; s<3; s++){
+  for(int s=0; s<maxs; s++){
     xuvlhist[s] = new TH1D(Form("xuvldist%d",s+1),Form("%dns",(s+1)*25),5,-0.5,4.5);
     xuvghist[s] = new TH1D(Form("xuvgdist%d",s+1),Form("%dns",(s+1)*25),5,-0.5,4.5);
   }
@@ -2262,7 +2556,7 @@ void difalpha(){
   cout <<"neff"<< f <<endl;
   cout <<"cut event"<< cut/1.0/Ninc <<endl;
   cout <<"hit but cut event"<< hitbutcut/1.0/Ninc <<endl;
-  for(int s=0;s<3;s++){
+  for(int s=0;s<maxs;s++){
 
     cout <<"time < "<<(s+1)*25<<"ns"<<endl;
     for(int l=1;l<5;l++){
